@@ -4,9 +4,9 @@ data directory has two link datasets
 
 VOCdevkit2007, CaltechPedestrians
 
-ln -s ~/CaltechPedestrians/extracted ~/faster_rcnn/data/CaltechPedestrians
+ln -s ~/CaltechPedestrians/extracted  ~/faster_rcnn/data/CaltechPedestrians
 
-ln -s ~/VOCdevkit ~/faster_rcnn/data/VOCdevkit2007
+ln -s ~/VOCdevkit  ~/faster_rcnn/data/VOCdevkit2007
 
 
 
