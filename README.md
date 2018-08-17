@@ -3,6 +3,7 @@ The entire project is based on https://github.com/longcw/faster_rcnn_pytorch
 data directory has two link datasets
 
 VOCdevkit2007, CaltechPedestrians
+
 ln -s ~/CaltechPedestrians/extracted ~/faster_rcnn/data/CaltechPedestrians
 ln -s ~/VOCdevkit ~/faster_rcnn/data/VOCdevkit2007
 
