@@ -1,8 +1,9 @@
 import os
 import torch
 import numpy as np
+import gc
 from datetime import datetime
-
+from torch.autograd import backward
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN, RPN
 from faster_rcnn.utils.timer import Timer
@@ -33,19 +34,20 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 output_dir = 'models/saved_model3'
 
 start_step = 0
 end_step = 100000
-lr_decay_steps = {60000, 80000}
+lr_decay_steps = {60000, 80000 }
 lr_decay = 1./10
 
 rand_seed = 1024
 _DEBUG = True
-use_tensorboard = True
+use_tensorboard = False
 remove_all_log = False   # remove all historical experiments in TensorBoard
 exp_name = None # the previous experiment name in TensorBoard
 
@@ -62,11 +64,13 @@ weight_decay = cfg.TRAIN.WEIGHT_DECAY
 disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
 
-# load data
+# load data        # PASCAL VOC 2007 : Total 5011 images, 15662 objects
 imdb = get_imdb(imdb_name)
 rdl_roidb.prepare_roidb(imdb)
 roidb = imdb.roidb
+
 data_layer = RoIDataLayer(roidb, imdb.num_classes)
+
 
 # load net
 net = FasterRCNN(classes=imdb.classes, debug=_DEBUG)
@@ -81,11 +85,13 @@ network.load_pretrained_npy(net, pretrained_model)
 # network.weights_normal_init([net.bbox_fc, net.score_fc, net.fc6, net.fc7], dev=0.01)
 
 net.cuda()
+# set net to be prepared to train
 net.train()
 
 params = list(net.parameters())
 # optimizer = torch.optim.Adam(params[-8:], lr=lr)
 optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
+
 
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -109,10 +115,12 @@ step_cnt = 0
 re_cnt = False
 t = Timer()
 t.tic()
+
 for step in range(start_step, end_step+1):
 
     # get one batch
     blobs = data_layer.forward()
+
     im_data = blobs['data']
     im_info = blobs['im_info']
     gt_boxes = blobs['gt_boxes']
@@ -128,15 +136,18 @@ for step in range(start_step, end_step+1):
         tf += float(net.tf)
         fg += net.fg_cnt
         bg += net.bg_cnt
+        if fg == 0 :
+            fg = 1
 
     train_loss += loss.data[0]
     step_cnt += 1
 
     # backward
-    optimizer.zero_grad()
+    optimizer.zero_grad() # clear grad
     loss.backward()
     network.clip_gradient(net, 10.)
     optimizer.step()
+
 
     if step % disp_interval == 0:
         duration = t.toc(average=False)
@@ -147,10 +158,11 @@ for step in range(start_step, end_step+1):
         log_print(log_text, color='green', attrs=['bold'])
 
         if _DEBUG:
+
             log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
             log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
-                net.rpn.cross_entropy.data.cpu().numpy()[0], net.rpn.loss_box.data.cpu().numpy()[0],
-                net.cross_entropy.data.cpu().numpy()[0], net.loss_box.data.cpu().numpy()[0])
+                net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
+                net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
             )
         re_cnt = True
 
@@ -167,7 +179,7 @@ for step in range(start_step, end_step+1):
             exp.add_scalar_dict(losses, step=step)
 
     if (step % 10000 == 0) and step > 0:
-        save_name = os.path.join(output_dir, 'faster_rcnn_{}.h5'.format(step))
+        save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(step))
         network.save_net(save_name, net)
         print('save model: {}'.format(save_name))
     if step in lr_decay_steps:
@@ -180,4 +192,5 @@ for step in range(start_step, end_step+1):
         step_cnt = 0
         t.tic()
         re_cnt = False
+
 

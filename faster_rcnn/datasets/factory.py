@@ -18,6 +18,7 @@ from .kitti_tracking import kitti_tracking
 from .nthu import nthu
 from .coco import coco
 from .kittivoc import kittivoc
+from .CaltechPedestrians import CaltechPedestrians
 
 
 def _selective_search_IJCV_top_k(split, year, top_k):
@@ -62,16 +63,26 @@ for year in ['2015']:
         name = 'coco_{}_{}'.format(year, split)
         __sets[name] = (lambda split=split, year=year: coco(split, year))
 
+# Set up coco_2017_<split>
+for year in ['2017']:
+    for split in ['train', 'val', 'test']:
+        name = 'coco_{}_{}'.format(year, split)
+        __sets[name] = (lambda split=split, year=year: coco(split, year))
+
 # NTHU dataset
 for split in ['71', '370']:
     name = 'nthu_{}'.format(split)
     # print name
     __sets[name] = (lambda split=split: nthu(split))
 
+# Set up CaltechPedestrians Benchmark dataset
+name ='CaltechPedestrians'
+__sets[name] = (lambda _name=name: CaltechPedestrians(_name))
+
 
 def get_imdb(name):
     """Get an imdb (image database) by name."""
-    if not __sets.has_key(name):
+    if not name in __sets:
         # print (list_imdbs())
         raise KeyError('Unknown dataset: {}'.format(name))
     return __sets[name]()

@@ -14,9 +14,9 @@ import numpy as np
 
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
-from ..fast_rcnn.config import cfg
+from faster_rcnn.fast_rcnn.config import cfg
 # <<<< obsolete
-from ..roi_data_layer.minibatch import get_minibatch
+from faster_rcnn.roi_data_layer.minibatch import get_minibatch
 
 class RoIDataLayer(object):
     """Fast R-CNN data layer used for training."""

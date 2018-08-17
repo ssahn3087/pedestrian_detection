@@ -11,6 +11,7 @@ import numpy as np
 from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
+from Cython.Build import cythonize
 
 
 def find_in_path(name, path):
@@ -49,7 +50,7 @@ def locate_cuda():
     cudaconfig = {'home': home, 'nvcc': nvcc,
                   'include': pjoin(home, 'include'),
                   'lib64': pjoin(home, 'lib64')}
-    for k, v in cudaconfig.iteritems():
+    for k, v in cudaconfig.items():
         if not os.path.exists(v):
             raise EnvironmentError('The CUDA %s path could not be located in %s' % (k, v))
 
@@ -113,24 +114,24 @@ class custom_build_ext(build_ext):
 
 ext_modules = [
     Extension(
-        "utils.cython_bbox",
+        "faster_rcnn.utils.cython_bbox",
         ["utils/bbox.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
     Extension(
-        "utils.cython_nms",
+        "faster_rcnn.utils.cython_nms",
         ["utils/nms.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
     Extension(
-        "nms.cpu_nms",
+        "faster_rcnn.nms.cpu_nms",
         ["nms/cpu_nms.pyx"],
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
-    Extension('nms.gpu_nms',
+    Extension('faster_rcnn.nms.gpu_nms',
               ['nms/nms_kernel.cu', 'nms/gpu_nms.pyx'],
               library_dirs=[CUDA['lib64']],
               libraries=['cudart'],
@@ -140,7 +141,7 @@ ext_modules = [
               # we're only going to use certain compiler args with nvcc and not with gcc
               # the implementation of this trick is in customize_compiler() below
               extra_compile_args={'gcc': ["-Wno-unused-function"],
-                                  'nvcc': ['-arch=sm_35',
+                                  'nvcc': ['-arch=sm_50',
                                            '--ptxas-options=-v',
                                            '-c',
                                            '--compiler-options',
@@ -148,7 +149,7 @@ ext_modules = [
               include_dirs=[numpy_include, CUDA['include']]
               ),
     Extension(
-        'pycocotools._mask',
+        'faster_rcnn.pycocotools._mask',
         sources=['pycocotools/maskApi.c', 'pycocotools/_mask.pyx'],
         include_dirs=[numpy_include, 'pycocotools'],
         extra_compile_args={

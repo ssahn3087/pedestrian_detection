@@ -5,20 +5,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from utils.timer import Timer
-from utils.blob import im_list_to_blob
-from fast_rcnn.nms_wrapper import nms
-from rpn_msr.proposal_layer import proposal_layer as proposal_layer_py
-from rpn_msr.anchor_target_layer import anchor_target_layer as anchor_target_layer_py
-from rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
-from fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
+from faster_rcnn.utils.timer import Timer
+from faster_rcnn.utils.blob import im_list_to_blob
+from faster_rcnn.fast_rcnn.nms_wrapper import nms
+from faster_rcnn.rpn_msr.proposal_layer import proposal_layer as proposal_layer_py
+from faster_rcnn.rpn_msr.anchor_target_layer import anchor_target_layer as anchor_target_layer_py
+from faster_rcnn.rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
+from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
-import network
-from network import Conv2d, FC
+import faster_rcnn.network as network
+from faster_rcnn.network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
-from roi_pooling.modules.roi_pool import RoIPool
-from vgg16 import VGG16
+from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
+from faster_rcnn.vgg16 import VGG16
+from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 
+cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
+cfg_from_file(cfg_file)
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
     dets = np.hstack((pred_boxes,
@@ -31,7 +34,7 @@ def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
 
 class RPN(nn.Module):
     _feat_stride = [16, ]
-    anchor_scales = [8, 16, 32]
+    anchor_scales = cfg.ANCHOR_SCALES
 
     def __init__(self):
         super(RPN, self).__init__()
@@ -59,7 +62,7 @@ class RPN(nn.Module):
         # rpn score
         rpn_cls_score = self.score_conv(rpn_conv1)
         rpn_cls_score_reshape = self.reshape_layer(rpn_cls_score, 2)
-        rpn_cls_prob = F.softmax(rpn_cls_score_reshape)
+        rpn_cls_prob = F.softmax(rpn_cls_score_reshape, dim=1)
         rpn_cls_prob_reshape = self.reshape_layer(rpn_cls_prob, len(self.anchor_scales)*3*2)
 
         # rpn boxes
@@ -85,11 +88,12 @@ class RPN(nn.Module):
         rpn_label = rpn_data[0].view(-1)
 
         rpn_keep = Variable(rpn_label.data.ne(-1).nonzero().squeeze()).cuda()
+
         rpn_cls_score = torch.index_select(rpn_cls_score, 0, rpn_keep)
+
         rpn_label = torch.index_select(rpn_label, 0, rpn_keep)
 
         fg_cnt = torch.sum(rpn_label.data.ne(0))
-
         rpn_cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label)
 
         # box loss
@@ -97,7 +101,7 @@ class RPN(nn.Module):
         rpn_bbox_targets = torch.mul(rpn_bbox_targets, rpn_bbox_inside_weights)
         rpn_bbox_pred = torch.mul(rpn_bbox_pred, rpn_bbox_inside_weights)
 
-        rpn_loss_box = F.smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, size_average=False) / (fg_cnt + 1e-4)
+        rpn_loss_box = F.smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, size_average=False) / float(fg_cnt + 1e-4)
 
         return rpn_cross_entropy, rpn_loss_box
 
@@ -172,6 +176,7 @@ class RPN(nn.Module):
 
 class FasterRCNN(nn.Module):
     n_classes = 21
+    # for pacal_voc but flexible
     classes = np.asarray(['__background__',
                        'aeroplane', 'bicycle', 'bird', 'boat',
                        'bottle', 'bus', 'car', 'cat', 'chair',
@@ -227,7 +232,7 @@ class FasterRCNN(nn.Module):
         x = F.dropout(x, training=self.training)
 
         cls_score = self.score_fc(x)
-        cls_prob = F.softmax(cls_score)
+        cls_prob = F.softmax(cls_score, dim=1)
         bbox_pred = self.bbox_fc(x)
 
         if self.training:
@@ -259,7 +264,7 @@ class FasterRCNN(nn.Module):
         bbox_targets = torch.mul(bbox_targets, bbox_inside_weights)
         bbox_pred = torch.mul(bbox_pred, bbox_inside_weights)
 
-        loss_box = F.smooth_l1_loss(bbox_pred, bbox_targets, size_average=False) / (fg_cnt + 1e-4)
+        loss_box = F.smooth_l1_loss(bbox_pred, bbox_targets, size_average=False) / float(fg_cnt + 1e-4)
 
         return cross_entropy, loss_box
 

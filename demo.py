@@ -3,7 +3,7 @@ import numpy as np
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN
 from faster_rcnn.utils.timer import Timer
-
+from debug import load_net_pedestrians
 
 def test():
     import os
@@ -12,11 +12,12 @@ def test():
     # im_file = '/media/longc/Data/data/2DMOT2015/test/ETH-Crossing/img1/000100.jpg'
     image = cv2.imread(im_file)
 
-    model_file = '/media/longc/Data/models/VGGnet_fast_rcnn_iter_70000.h5'
+    model_file = '/home/hyojiny1/yoon/model/pytorch/faster_rcnn/VGGnet_fast_rcnn_iter_70000.h5'
     # model_file = '/media/longc/Data/models/faster_rcnn_pytorch3/faster_rcnn_100000.h5'
     # model_file = '/media/longc/Data/models/faster_rcnn_pytorch2/faster_rcnn_2000.h5'
     detector = FasterRCNN()
-    network.load_net(model_file, detector)
+    #network.load_net(model_file, detector)
+    network.load_net_pedestrians(model_file, detector)
     detector.cuda()
     detector.eval()
     print('load model successfully!')

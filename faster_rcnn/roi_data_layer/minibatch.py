@@ -18,6 +18,7 @@ from ..fast_rcnn.config import cfg
 # <<<< obsolete
 from ..utils.blob import prep_im_for_blob, im_list_to_blob
 
+
 def get_minibatch(roidb, num_classes):
     """Given a roidb, construct a minibatch sampled from it."""
     num_images = len(roidb)
@@ -28,6 +29,7 @@ def get_minibatch(roidb, num_classes):
         'num_images ({}) must divide BATCH_SIZE ({})'. \
         format(num_images, cfg.TRAIN.BATCH_SIZE)
     rois_per_image = cfg.TRAIN.BATCH_SIZE / num_images
+    # Set the number of foreground images : class > 0
     fg_rois_per_image = np.round(cfg.TRAIN.FG_FRACTION * rois_per_image)
 
     # Get the input image blob, formatted for caffe
@@ -36,6 +38,7 @@ def get_minibatch(roidb, num_classes):
     blobs = {'data': im_blob}
 
     if cfg.TRAIN.HAS_RPN:
+        # Faster RCNN takes one image to batch cf. Fast RCNN : 2 images per batch
         assert len(im_scales) == 1, "Single batch only"
         assert len(roidb) == 1, "Single batch only"
         # gt boxes: (x1, y1, x2, y2, cls)
@@ -47,6 +50,7 @@ def get_minibatch(roidb, num_classes):
         blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]  \
             if 'gt_ishard' in roidb[0] else np.zeros(gt_inds.size, dtype=int)
         # blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]
+        # dontcare areas is not used in Faster RCNN implementation
         blobs['dontcare_areas'] = roidb[0]['dontcare_areas'] * im_scales[0] \
             if 'dontcare_areas' in roidb[0] else np.zeros([0, 4], dtype=float)
         blobs['im_info'] = np.array(
@@ -61,7 +65,7 @@ def get_minibatch(roidb, num_classes):
         bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
         bbox_inside_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
         # all_overlaps = []
-        for im_i in xrange(num_images):
+        for im_i in range(num_images):
             labels, overlaps, im_rois, bbox_targets, bbox_inside_weights \
                 = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
                                num_classes)
@@ -91,6 +95,7 @@ def get_minibatch(roidb, num_classes):
                 np.array(bbox_inside_blob > 0).astype(np.float32)
 
     return blobs
+
 
 def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
     """Generate a random sample of RoIs comprising foreground and background
@@ -138,6 +143,7 @@ def _sample_rois(roidb, fg_rois_per_image, rois_per_image, num_classes):
 
     return labels, overlaps, rois, bbox_targets, bbox_inside_weights
 
+
 def _get_image_blob(roidb, scale_inds):
     """Builds an input blob from the images in the roidb at the specified
     scales.
@@ -145,7 +151,8 @@ def _get_image_blob(roidb, scale_inds):
     num_images = len(roidb)
     processed_ims = []
     im_scales = []
-    for i in xrange(num_images):
+    for i in range(num_images):
+        # roidb[i]['image'] : image path
         im = cv2.imread(roidb[i]['image'])
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]
@@ -160,10 +167,12 @@ def _get_image_blob(roidb, scale_inds):
 
     return blob, im_scales
 
+
 def _project_im_rois(im_rois, im_scale_factor):
     """Project image RoIs into the rescaled training image."""
     rois = im_rois * im_scale_factor
     return rois
+
 
 def _get_bbox_regression_labels(bbox_target_data, num_classes):
     """Bounding-box regression targets are stored in a compact form in the
@@ -192,7 +201,7 @@ def _get_bbox_regression_labels(bbox_target_data, num_classes):
 def _vis_minibatch(im_blob, rois_blob, labels_blob, overlaps):
     """Visualize a mini-batch for debugging."""
     import matplotlib.pyplot as plt
-    for i in xrange(rois_blob.shape[0]):
+    for i in range(rois_blob.shape[0]):
         rois = rois_blob[i, :]
         im_ind = rois[0]
         roi = rois[1:]
@@ -202,7 +211,7 @@ def _vis_minibatch(im_blob, rois_blob, labels_blob, overlaps):
         im = im.astype(np.uint8)
         cls = labels_blob[i]
         plt.imshow(im)
-        print 'class: ', cls, ' overlap: ', overlaps[i]
+        print ('class: ', cls, ' overlap: ', overlaps[i])
         plt.gca().add_patch(
             plt.Rectangle((roi[0], roi[1]), roi[2] - roi[0],
                           roi[3] - roi[1], fill=False,

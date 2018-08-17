@@ -10,12 +10,12 @@ import numpy as np
 import numpy.random as npr
 import pdb
 
-from ..utils.cython_bbox import bbox_overlaps, bbox_intersections
+from faster_rcnn.utils.cython_bbox import bbox_overlaps, bbox_intersections
 
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
-from ..fast_rcnn.config import cfg
-from ..fast_rcnn.bbox_transform import bbox_transform
+from faster_rcnn.fast_rcnn.config import cfg
+from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
 
 # <<<< obsolete
 
@@ -62,6 +62,7 @@ def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_cl
     """
     jittered_gt_boxes = _jitter_gt_boxes(gt_easyboxes)
     zeros = np.zeros((gt_easyboxes.shape[0] * 2, 1), dtype=gt_easyboxes.dtype)
+
     all_rois = np.vstack((all_rois, \
                           np.hstack((zeros, np.vstack((gt_easyboxes[:, :-1], jittered_gt_boxes[:, :-1]))))))
 
@@ -83,14 +84,14 @@ def proposal_target_layer(rpn_rois, gt_boxes, gt_ishard, dontcare_areas, _num_cl
     if DEBUG:
         if _count == 1:
             _fg_num, _bg_num = 0, 0
-        print 'num fg: {}'.format((labels > 0).sum())
-        print 'num bg: {}'.format((labels == 0).sum())
+        print ('num fg: {}'.format((labels > 0).sum()))
+        print ('num bg: {}'.format((labels == 0).sum()))
         _count += 1
         _fg_num += (labels > 0).sum()
         _bg_num += (labels == 0).sum()
-        print 'num fg avg: {}'.format(_fg_num / _count)
-        print 'num bg avg: {}'.format(_bg_num / _count)
-        print 'ratio: {:.3f}'.format(float(_fg_num) / float(_bg_num))
+        print ('num fg avg: {}'.format(_fg_num / _count))
+        print ('num bg avg: {}'.format(_bg_num / _count))
+        print ('ratio: {:.3f}'.format(float(_fg_num) / float(_bg_num)))
 
     rois = rois.reshape(-1, 5)
     labels = labels.reshape(-1, 1)
@@ -130,10 +131,10 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
                                     np.where(hard_max_overlaps >= cfg.TRAIN.FG_THRESH)[0])
             if DEBUG:
                 if ignore_inds.size > 1:
-                    print 'num hard: {:d}:'.format(ignore_inds.size)
-                    print 'hard box:', gt_hardboxes
-                    print 'rois: '
-                    print all_rois[ignore_inds]
+                    print ('num hard: {:d}:'.format(ignore_inds.size))
+                    print ('hard box:', gt_hardboxes)
+                    print ('rois: ')
+                    print (all_rois[ignore_inds])
 
     # preclude dontcare areas
     if dontcare_areas is not None and dontcare_areas.shape[0] > 0:
@@ -168,7 +169,7 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
     # Compute number of background RoIs to take from this image (guarding
     # against there being fewer than desired)
     bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
-    bg_rois_per_this_image = min(bg_rois_per_this_image, bg_inds.size)
+    bg_rois_per_this_image = int(min(bg_rois_per_this_image, bg_inds.size))
     # Sample background regions without replacement
     if bg_inds.size > 0:
         bg_inds = npr.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
@@ -179,6 +180,7 @@ def _sample_rois(all_rois, gt_boxes, gt_ishard, dontcare_areas, fg_rois_per_imag
     labels = labels[keep_inds]
     # Clamp labels for the background RoIs to 0
     labels[fg_rois_per_this_image:] = 0
+
     rois = all_rois[keep_inds]
 
     bbox_target_data = _compute_targets(

@@ -11,7 +11,7 @@ import numpy as np
 import numpy.random as npr
 
 from .generate_anchors import generate_anchors
-from ..utils.cython_bbox import bbox_overlaps, bbox_intersections
+from faster_rcnn.utils.cython_bbox import bbox_overlaps, bbox_intersections
 
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
@@ -24,7 +24,7 @@ DEBUG = False
 
 
 def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_info, _feat_stride=[16, ],
-                        anchor_scales=[4, 8, 16, 32]):
+                        anchor_scales=[8, 16, 32]):
     """
     Assign anchors to ground-truth targets. Produces anchor classification
     labels and bounding-box regression targets.
@@ -51,13 +51,13 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
     _num_anchors = _anchors.shape[0]
 
     if DEBUG:
-        print 'anchors:'
-        print _anchors
-        print 'anchor shapes:'
-        print np.hstack((
+        print ('anchors:')
+        print (_anchors)
+        print ('anchor shapes:')
+        print (np.hstack((
             _anchors[:, 2::4] - _anchors[:, 0::4],
             _anchors[:, 3::4] - _anchors[:, 1::4],
-        ))
+        )))
         _counts = cfg.EPS
         _sums = np.zeros((1, 4))
         _squared_sums = np.zeros((1, 4))
@@ -88,13 +88,13 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
     height, width = rpn_cls_score.shape[2:4]
 
     if DEBUG:
-        print 'AnchorTargetLayer: height', height, 'width', width
-        print ''
-        print 'im_size: ({}, {})'.format(im_info[0], im_info[1])
-        print 'scale: {}'.format(im_info[2])
-        print 'height, width: ({}, {})'.format(height, width)
-        print 'rpn: gt_boxes.shape', gt_boxes.shape
-        print 'rpn: gt_boxes', gt_boxes
+        print ('AnchorTargetLayer: height', height, 'width', width)
+        print ('')
+        print ('im_size: ({}, {})'.format(im_info[0], im_info[1]))
+        print ('scale: {}'.format(im_info[2]))
+        print ('height, width: ({}, {})'.format(height, width))
+        print ('rpn: gt_boxes.shape', gt_boxes.shape)
+        print ('rpn: gt_boxes', gt_boxes)
 
     # 1. Generate proposals from bbox deltas and shifted anchors
     shift_x = np.arange(0, width) * _feat_stride
@@ -123,13 +123,13 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
     )[0]
 
     if DEBUG:
-        print 'total_anchors', total_anchors
-        print 'inds_inside', len(inds_inside)
+        print ('total_anchors', total_anchors)
+        print ('inds_inside', len(inds_inside))
 
     # keep only inside anchors
     anchors = all_anchors[inds_inside, :]
     if DEBUG:
-        print 'anchors.shape', anchors.shape
+        print ('anchors.shape', anchors.shape)
 
     # label: 1 is positive, 0 is negative, -1 is dont care
     # (A)
@@ -138,9 +138,11 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
 
     # overlaps between the anchors and the gt boxes
     # overlaps (ex, gt), shape is A x G
+
     overlaps = bbox_overlaps(
         np.ascontiguousarray(anchors, dtype=np.float),
         np.ascontiguousarray(gt_boxes, dtype=np.float))
+
     argmax_overlaps = overlaps.argmax(axis=1)  # (A)
     max_overlaps = overlaps[np.arange(len(inds_inside)), argmax_overlaps]
     gt_argmax_overlaps = overlaps.argmax(axis=0)  # G
@@ -205,6 +207,7 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
         # len(bg_inds), len(disable_inds), np.sum(labels == 0))
 
     # bbox_targets = np.zeros((len(inds_inside), 4), dtype=np.float32)
+
     bbox_targets = _compute_targets(anchors, gt_boxes[argmax_overlaps, :])
 
     bbox_inside_weights = np.zeros((len(inds_inside), 4), dtype=np.float32)
@@ -234,10 +237,10 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
         _counts += np.sum(labels == 1)
         means = _sums / _counts
         stds = np.sqrt(_squared_sums / _counts - means ** 2)
-        print 'means:'
-        print means
-        print 'stdevs:'
-        print stds
+        print ('means:')
+        print (means)
+        print ('stdevs:')
+        print (stds)
 
     # map up to original set of anchors
     labels = _unmap(labels, total_anchors, inds_inside, fill=-1)
@@ -246,17 +249,18 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
     bbox_outside_weights = _unmap(bbox_outside_weights, total_anchors, inds_inside, fill=0)
 
     if DEBUG:
-        print 'rpn: max max_overlap', np.max(max_overlaps)
-        print 'rpn: num_positive', np.sum(labels == 1)
-        print 'rpn: num_negative', np.sum(labels == 0)
+        print ('rpn: max max_overlap', np.max(max_overlaps))
+        print ('rpn: num_positive', np.sum(labels == 1))
+        print ('rpn: num_negative', np.sum(labels == 0))
         _fg_sum += np.sum(labels == 1)
         _bg_sum += np.sum(labels == 0)
         _count += 1
-        print 'rpn: num_positive avg', _fg_sum / _count
-        print 'rpn: num_negative avg', _bg_sum / _count
+        print ('rpn: num_positive avg', _fg_sum / _count)
+        print ('rpn: num_negative avg', _bg_sum / _count)
 
     # labels
     # pdb.set_trace()
+
     labels = labels.reshape((1, height, width, A))
     labels = labels.transpose(0, 3, 1, 2)
     rpn_labels = labels.reshape((1, 1, A * height, width)).transpose(0, 2, 3, 1)

@@ -1,26 +1,33 @@
 import os
 import json
 import glob
-import pickle as cPickle
+import pickle
 import scipy.sparse
 import numpy as np
-from .imdb import imdb
-from ..fast_rcnn.config import cfg
+from faster_rcnn.datasets.imdb import imdb
+from faster_rcnn.fast_rcnn.config import cfg
 
 
 class CaltechPedestrians(imdb):
+
     def __init__(self, name):
         imdb.__init__(self, name)
+        # object image condition ex) bbox of object is too small to recognize
+        self.area_thresh = 200.0
+
         self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
-        self._annotations = self._load_json_file()
+        self.annotations_file_name = "annotations.json"
+        self.annotations = self._load_json_file()
         self._image_ext = '.jpg'
         self._classes = ('__background__',  # always index 0 but no background data
                          'person')
+        self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self._image_index = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
 
     """
+    Dataset from : http://www.vision.caltech.edu/Image_Datasets/CaltechPedestrians/
         --annotation file configure--
         ex) set_name = set00-010 / video_name = V000-014
         data[set_name][video_name]['nFrame']  = nFrame
@@ -37,15 +44,15 @@ class CaltechPedestrians(imdb):
                         'occl' : occlusion
                         'lock' : object is fixed
                         'posv' : visible part, if posv ==[0, 0, 0, 0], entire object is visibile
-                        'str' : start frame where object appears
-                        'end' : end frame where object disappears
+                        'str' : start frame where the object appears
+                        'end' : end frame where the object disappears
                         'lbl' : label (class)
                         'hide' : object is hiden
                         'init' : object exists 1/0}], ... }
     """
 
     def _load_json_file(self):
-        with open(self.annotations_path+"/annotations.json") as json_file:
+        with open(os.path.join(self.annotations_path, self.annotations_file_name)) as json_file:
             data = json.load(json_file)
         return data
 
@@ -59,67 +66,67 @@ class CaltechPedestrians(imdb):
         try:
             if os.path.getsize(cache_file) > 0:
                 with open(cache_file, 'rb') as fid:
-                    roidb = cPickle.load(fid)
+                    roidb = pickle.load(fid)
                 print ('{} gt roidb loaded from {}'.format(self.name, cache_file))
                 return roidb
         except FileNotFoundError as e:
             print(str(e))
-            gt_roidb = self._load_pedestrian_annotation()
+            gt_roidb = [self._load_pedestrian_annotation(index)
+                        for index in self.image_index]
             with open(cache_file, 'wb') as fid:
-                for db in gt_roidb:
-                    cPickle.dump(db, fid, cPickle.HIGHEST_PROTOCOL)
-                print('wrote gt roidb to {}'.format(cache_file))
+                pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
+            print('wrote gt roidb to {}'.format(cache_file))
+            return gt_roidb
 
-        return gt_roidb
+    def _load_pedestrian_annotation(self, index):
 
-    def _load_pedestrian_annotation(self):
-        gt_roidb = []
+        [i, fid, set_name, video_name] = index.split("/")[-4:]
 
-        for set_path in sorted(glob.glob(self.image_path+'/set*')):
-            set_name = set_path.split("/")[-1]
-            for video_path in sorted(glob.glob(set_path+'/V*')):
-                video_name = video_path.split("/")[-1]
-                all_frames = self._annotations[set_name][video_name]["frames"]
-                for fid, val in all_frames.items():
-                    # num_obj = 1 only considering one person
-                    num_objs = 1
-                    boxes = np.zeros((num_objs, 4), dtype=np.uint16)
-                    gt_classes = np.zeros((num_objs), dtype=np.int32)
-                    overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
-                    # "Seg" area for pedestrian is just the box area
-                    seg_areas = np.zeros((num_objs), dtype=np.float32)
-                    ishards = np.zeros((num_objs), dtype=np.int32)
+        # Load data from a data frame
+        unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
+        pos = np.array(unit_frame['pos'], dtype=np.float)
+        label = unit_frame['lbl']
+        # Make pixel indexes 0-based
+        l = pos[0] - 1
+        t = pos[1] - 1
+        w = pos[2]
+        h = pos[3]
 
-                    # Load data from a data frame
-                    unit_frame = all_frames[fid][0]
-                    # all indexes are 0 in this dataset
-                    ix = num_objs - 1
-                    pos = unit_frame['pos']
+        # num_obj = 1 only considering one person
+        num_objs = 1
+        boxes = np.zeros((num_objs, 4), dtype=np.uint16)
+        gt_classes = np.zeros((num_objs), dtype=np.int32)
+        overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
+        # "Seg" area for pedestrian is just the box area
+        seg_areas = np.zeros((num_objs), dtype=np.float32)
+        ishards = np.zeros((num_objs), dtype=np.int32)
 
-                    # Make pixel indexes 0-based
-                    l = float(pos[0]) - 1
-                    t = float(pos[1]) - 1
-                    w = float(pos[0])
-                    h = float(pos[1])
-                    boxes[ix, :] = [l, t, l + w, t + h]
-                    gt_classes[ix] = 1
-                    overlaps[ix, 1] = 1.0
-                    seg_areas[ix] = w * h
 
-                    diffc = unit_frame['occl']
-                    difficult = 0 if diffc == None else diffc
-                    ishards[ix] = difficult
+        # all indexes are 0 in this dataset
+        ix = num_objs - 1
+        # boxes, gt_classes, seg_areas, ishards, overlaps
+        boxes[ix, :] = [l, t, l + w, t + h]
+        cls = self._class_to_ind[label]
+        gt_classes[ix] = cls
+        overlaps[ix, cls] = 1.0
+        seg_areas[ix] = w * h
+        diffc = unit_frame['occl']
+        difficult = 0 if diffc == None else diffc
+        ishards[ix] = difficult
+        overlaps = scipy.sparse.csr_matrix(overlaps)
 
-                    overlaps = scipy.sparse.csr_matrix(overlaps)
+        return {'boxes': boxes,
+                'gt_classes': gt_classes,
+                'gt_ishard': ishards,
+                'gt_overlaps': overlaps,
+                'flipped': False,
+                'seg_areas': seg_areas}
 
-                    gt_roidb.append({'boxes': boxes,
-                            'gt_classes': gt_classes,
-                            'gt_ishard': ishards,
-                            'gt_overlaps': overlaps,
-                            'flipped': False,
-                            'seg_areas': seg_areas,
-                            'set_name' : set_name, 'video_name' : video_name})
-        return gt_roidb
+    def image_id_at(self, i):
+        """
+        Return the absolute path to image i in the image sequence.
+        """
+        return i
 
     def image_path_at(self, i):
         """
@@ -146,6 +153,21 @@ class CaltechPedestrians(imdb):
         image_set_file = self.image_path + "/ref.txt"
         assert os.path.exists(image_set_file), \
             'Path does not exist: {}'.format(image_set_file)
+
+        if (self.area_thresh is not None) or (self.area_thresh != 0):
+            print("area_thresh exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
+
+        processed_image_index = []
         with open(image_set_file) as f:
-            image_index = [x.strip() for x in f.readlines()]
-        return image_index
+            for x in f.readlines():
+                index = x.strip()
+                [i, fid, set_name, video_name] = index.split("/")[-4:]
+                unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
+                pos = unit_frame['pos']
+                label = unit_frame['lbl']
+                area = float(pos[2]) * float(pos[3])
+                # take label == 'person' / areas > 200.0
+                if label != 'person' or area < self.area_thresh: continue
+                else: processed_image_index.append(index)
+
+        return processed_image_index

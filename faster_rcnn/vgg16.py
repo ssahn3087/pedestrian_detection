@@ -4,9 +4,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from utils.blob import im_list_to_blob
-from network import Conv2d
-import network
+from faster_rcnn.utils.blob import im_list_to_blob
+from faster_rcnn.network import Conv2d
+import faster_rcnn.network as network
 
 
 class VGG16(nn.Module):

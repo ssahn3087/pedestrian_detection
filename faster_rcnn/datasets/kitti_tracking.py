@@ -3,7 +3,7 @@ import PIL
 import numpy as np
 import scipy.sparse
 import subprocess
-import cPickle
+import _pickle as cPickle
 import math
 
 from .imdb import imdb
@@ -143,7 +143,7 @@ class kitti_tracking(imdb):
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
                 roidb = cPickle.load(fid)
-            print '{} gt roidb loaded from {}'.format(self.name, cache_file)
+            print ('{} gt roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
         gt_roidb = [self._load_kitti_voxel_exemplar_annotation(index)
@@ -152,14 +152,14 @@ class kitti_tracking(imdb):
         if cfg.IS_RPN:
             # print out recall
             for i in xrange(1, self.num_classes):
-                print '{}: Total number of boxes {:d}'.format(self.classes[i], self._num_boxes_all[i])
-                print '{}: Number of boxes covered {:d}'.format(self.classes[i], self._num_boxes_covered[i])
-                print '{}: Recall {:f}'.format(self.classes[i],
-                                               float(self._num_boxes_covered[i]) / float(self._num_boxes_all[i]))
+                print ('{}: Total number of boxes {:d}'.format(self.classes[i], self._num_boxes_all[i]))
+                print ('{}: Number of boxes covered {:d}'.format(self.classes[i], self._num_boxes_covered[i]))
+                print ('{}: Recall {:f}'.format(self.classes[i],
+                                               float(self._num_boxes_covered[i]) / float(self._num_boxes_all[i])))
 
         with open(cache_file, 'wb') as fid:
             cPickle.dump(gt_roidb, fid, cPickle.HIGHEST_PROTOCOL)
-        print 'wrote gt roidb to {}'.format(cache_file)
+        print ('wrote gt roidb to {}'.format(cache_file))
 
         return gt_roidb
 
@@ -180,7 +180,7 @@ class kitti_tracking(imdb):
         else:
             filename = os.path.join(self._kitti_tracking_path, cfg.SUBCLS_NAME, prefix, index + '.txt')
             if os.path.exists(filename):
-                print filename
+                print (filename)
 
                 # the annotation file contains flipped objects    
                 lines = []
@@ -342,31 +342,31 @@ class kitti_tracking(imdb):
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
                 roidb = cPickle.load(fid)
-            print '{} roidb loaded from {}'.format(self.name, cache_file)
+            print ('{} roidb loaded from {}'.format(self.name, cache_file))
             return roidb
 
         if self._image_set != 'testing':
             gt_roidb = self.gt_roidb()
 
-            print 'Loading region proposal network boxes...'
+            print ('Loading region proposal network boxes...')
             if self._image_set == 'trainval':
                 model = cfg.REGION_PROPOSAL + '_trainval/'
             else:
                 model = cfg.REGION_PROPOSAL + '_train/'
             rpn_roidb = self._load_rpn_roidb(gt_roidb, model)
-            print 'Region proposal network boxes loaded'
+            print ('Region proposal network boxes loaded')
             roidb = imdb.merge_roidbs(rpn_roidb, gt_roidb)
         else:
-            print 'Loading region proposal network boxes...'
+            print ('Loading region proposal network boxes...')
             model = cfg.REGION_PROPOSAL + '_trainval/'
             roidb = self._load_rpn_roidb(None, model)
-            print 'Region proposal network boxes loaded'
+            print ('Region proposal network boxes loaded')
 
-        print '{} region proposals per image'.format(self._num_boxes_proposal / len(self.image_index))
+        print ('{} region proposals per image'.format(self._num_boxes_proposal / len(self.image_index)))
 
         with open(cache_file, 'wb') as fid:
             cPickle.dump(roidb, fid, cPickle.HIGHEST_PROTOCOL)
-        print 'wrote roidb to {}'.format(cache_file)
+        print ('wrote roidb to {}'.format(cache_file))
 
         return roidb
 
@@ -380,7 +380,7 @@ class kitti_tracking(imdb):
                                     index + '.txt')
             assert os.path.exists(filename), \
                 'RPN data not found at: {}'.format(filename)
-            print filename
+            print (filename)
             raw_data = np.loadtxt(filename, dtype=float)
             if len(raw_data.shape) == 1:
                 if raw_data.size == 0:
@@ -418,7 +418,7 @@ class kitti_tracking(imdb):
         # for each image
         for im_ind, index in enumerate(self.image_index):
             filename = os.path.join(output_dir, index[5:] + '.txt')
-            print 'Writing kitti_tracking results to file ' + filename
+            print ('Writing kitti_tracking results to file ' + filename)
             with open(filename, 'wt') as f:
                 # for each class
                 for cls_ind, cls in enumerate(self.classes):
@@ -427,7 +427,7 @@ class kitti_tracking(imdb):
                     dets = all_boxes[cls_ind][im_ind]
                     if dets == []:
                         continue
-                    for k in xrange(dets.shape[0]):
+                    for k in range(dets.shape[0]):
                         subcls = int(dets[k, 5])
                         cls_name = self.classes[self.subclass_mapping[subcls]]
                         assert (cls_name == cls), 'subclass not in class'
@@ -453,7 +453,7 @@ class kitti_tracking(imdb):
 
         # open results file
         filename = os.path.join(output_dir, self._seq_name + '.txt')
-        print 'Writing all kitti_tracking results to file ' + filename
+        print ('Writing all kitti_tracking results to file ' + filename)
         with open(filename, 'wt') as f:
             # for each image
             for im_ind, index in enumerate(self.image_index):
@@ -477,7 +477,7 @@ class kitti_tracking(imdb):
         # for each image
         for im_ind, index in enumerate(self.image_index):
             filename = os.path.join(output_dir, index[5:] + '.txt')
-            print 'Writing kitti_tracking results to file ' + filename
+            print ('Writing kitti_tracking results to file ' + filename)
             with open(filename, 'wt') as f:
                 # for each class
                 for cls_ind, cls in enumerate(self.classes):
@@ -494,12 +494,12 @@ class kitti_tracking(imdb):
         # for each image
         for im_ind, index in enumerate(self.image_index):
             filename = os.path.join(output_dir, index + '.txt')
-            print 'Writing kitti_tracking results to file ' + filename
+            print ('Writing kitti_tracking results to file ' + filename)
             with open(filename, 'wt') as f:
                 dets = all_boxes[im_ind]
                 if dets == []:
                     continue
-                for k in xrange(dets.shape[0]):
+                for k in range(dets.shape[0]):
                     f.write('{:f} {:f} {:f} {:f} {:.32f}\n'.format(dets[k, 0], dets[k, 1], dets[k, 2], dets[k, 3],
                                                                    dets[k, 4]))
 

@@ -49,8 +49,37 @@ def load_net(fname, net):
         v.copy_(param)
 
 
+def load_net_pedestrians(fname, net):
+    import h5py
+    h5f = h5py.File(fname, mode='r')
+    cls_related_part = list(net.state_dict().keys())[-4:]
+    own_dict = net.state_dict()
+    need_index = [0, 15]
+    # num_classses = size of score_fc.fc.bias in net
+    num_classes = len(list(net.state_dict().values())[-3])
+    irrelvant_indices = np.where(np.isin(np.arange(21), need_index) \
+                                 == False)[0]
+    for k, v in own_dict.items():
+        data = np.asarray(h5f[k])
+        if k in cls_related_part:
+            if str(k).startswith('score'):
+                if num_classes == 2:
+                    data = np.delete(data, irrelvant_indices, axis=0)
+                else:
+                    data[irrelvant_indices] = 0.
+            elif str(k).startswith('bbox'):
+                data = data.reshape(num_classes, 4, -1)
+                if num_classes == 2:
+                    data = np.delete(data, irrelvant_indices, axis=0)
+                else:
+                    data[irrelvant_indices] = 0.
+                data = data.reshape(num_classes * 4, -1)
+        param = torch.from_numpy(data)
+        v.copy_(param)
+
+
 def load_pretrained_npy(faster_rcnn_model, fname):
-    params = np.load(fname).item()
+    params = np.load(fname, encoding='latin1').item()
     # vgg16
     vgg16_dict = faster_rcnn_model.rpn.features.state_dict()
     for name, val in vgg16_dict.items():

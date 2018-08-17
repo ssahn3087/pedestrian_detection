@@ -15,6 +15,7 @@ from .kitti import kitti
 from .kitti_tracking import kitti_tracking
 from .nissan import nissan
 from .nthu import nthu
+from .CaltechPedestrians import CaltechPedestrians
 from . import factory
 
 ## NOTE: obsolete
