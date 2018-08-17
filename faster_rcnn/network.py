@@ -57,6 +57,7 @@ def load_net_pedestrians(fname, net):
     need_index = [0, 15]
     # num_classses = size of score_fc.fc.bias in net
     num_classes = len(list(net.state_dict().values())[-3])
+
     irrelvant_indices = np.where(np.isin(np.arange(21), need_index) \
                                  == False)[0]
     for k, v in own_dict.items():
@@ -68,7 +69,7 @@ def load_net_pedestrians(fname, net):
                 else:
                     data[irrelvant_indices] = 0.
             elif str(k).startswith('bbox'):
-                data = data.reshape(num_classes, 4, -1)
+                data = data.reshape(21, 4, -1)
                 if num_classes == 2:
                     data = np.delete(data, irrelvant_indices, axis=0)
                 else:
@@ -78,7 +79,7 @@ def load_net_pedestrians(fname, net):
         v.copy_(param)
 
 
-def load_pretrained_npy(faster_rcnn_model, fname):
+def load_pretrained_npy(fname, faster_rcnn_model):
     params = np.load(fname, encoding='latin1').item()
     # vgg16
     vgg16_dict = faster_rcnn_model.rpn.features.state_dict()
