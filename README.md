@@ -8,6 +8,10 @@ ln -s ~/CaltechPedestrians/extracted ~/faster_rcnn/data/CaltechPedestrians
 
 ln -s ~/VOCdevkit ~/faster_rcnn/data/VOCdevkit2007
 
+
+
+
+
 Use pretrained model 'VGGnet_fast_rcnn_iter_70000.h5' to train CaltechPedestrians dataset
 
 This code is built for individual study to detect Pedestrian dataset.
