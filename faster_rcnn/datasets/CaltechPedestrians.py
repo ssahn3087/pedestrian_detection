@@ -4,9 +4,10 @@ import glob
 import pickle
 import scipy.sparse
 import numpy as np
+import numpy.random as npr
 from faster_rcnn.datasets.imdb import imdb
 from faster_rcnn.fast_rcnn.config import cfg
-
+from collections import defaultdict
 
 class CaltechPedestrians(imdb):
 
@@ -14,7 +15,7 @@ class CaltechPedestrians(imdb):
         imdb.__init__(self, name)
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-
+        self.scene_per_episode_max = 10
         self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -155,19 +156,56 @@ class CaltechPedestrians(imdb):
             'Path does not exist: {}'.format(image_set_file)
 
         if (self.area_thresh is not None) or (self.area_thresh != 0):
-            print("area_thresh exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
+            print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
         processed_image_index = []
-        with open(image_set_file) as f:
-            for x in f.readlines():
-                index = x.strip()
-                [i, fid, set_name, video_name] = index.split("/")[-4:]
+
+        episodes = self.get_epsiode()
+        # unit is tuple (set_name, video_name, str, end)
+        i = 1
+        for key, fids in episodes.items():
+            set_name, video_name = key[:2]
+            indices = np.sort(npr.choice(len(fids),self.scene_per_episode_max, replace=False)) \
+                if len(fids) > self.scene_per_episode_max else np.arange(len(fids))
+            for fid in np.asarray(fids)[indices]:
                 unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
                 pos = unit_frame['pos']
                 label = unit_frame['lbl']
                 area = float(pos[2]) * float(pos[3])
                 # take label == 'person' / areas > 200.0
                 if label != 'person' or area < self.area_thresh: continue
-                else: processed_image_index.append(index)
+                else:
+                    index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
+                    processed_image_index.append(index)
+                    i += 1
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
+                                    .format(i, self.scene_per_episode_max))
+        # this method takes all images (# 91199) as input
+        # with open(image_set_file) as f:
+        #     for x in f.readlines():
+        #         index = x.strip()
+        #         [i, fid, set_name, video_name] = index.split("/")[-4:]
+        #         unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
+        #         pos = unit_frame['pos']
+        #         label = unit_frame['lbl']
+        #         area = float(pos[2]) * float(pos[3])
+        #         # take label == 'person' / areas > 200.0
+        #         if label != 'person' or area < self.area_thresh: continue
+        #         else: processed_image_index.append(index)
 
         return processed_image_index
+
+    def get_epsiode(self):
+        episodes = defaultdict(list)
+        for set_path in sorted(glob.glob(self.image_path + '/set*')):
+            set_name = set_path.split("/")[-1]
+            for video_path in sorted(glob.glob(set_path + '/V*')):
+                video_name = video_path.split("/")[-1]
+                unit = self.annotations[set_name][video_name]["frames"]
+                for fid, v in unit.items():
+                    if fid == '0': continue
+                    _str = unit[fid][0]['str']
+                    _end = unit[fid][0]['end']
+                    episodes[(set_name, video_name, _str, _end)].append(fid)
+        print("CaltechPedestrians dataset consists of {} episodes".format(len(episodes)))
+        return episodes

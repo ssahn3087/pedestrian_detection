@@ -16,8 +16,8 @@ def test():
     # model_file = '/media/longc/Data/models/faster_rcnn_pytorch3/faster_rcnn_100000.h5'
     # model_file = '/media/longc/Data/models/faster_rcnn_pytorch2/faster_rcnn_2000.h5'
     detector = FasterRCNN()
-    #network.load_net(model_file, detector)
-    network.load_net_pedestrians(model_file, detector)
+    # network.load_net(model_file, detector)
+    load_net_pedestrians(model_file, detector)
     detector.cuda()
     detector.eval()
     print('load model successfully!')
