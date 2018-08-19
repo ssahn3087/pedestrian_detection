@@ -55,8 +55,8 @@ def anchor_target_layer(rpn_cls_score, gt_boxes, gt_ishard, dontcare_areas, im_i
         print (_anchors)
         print ('anchor shapes:')
         print (np.hstack((
-            _anchors[:, 2::4] - _anchors[:, 0::4],
-            _anchors[:, 3::4] - _anchors[:, 1::4],
+            _anchors[:, 2::4] - _anchors[:, 0::4] + 1,
+            _anchors[:, 3::4] - _anchors[:, 1::4] + 1,
         )))
         _counts = cfg.EPS
         _sums = np.zeros((1, 4))

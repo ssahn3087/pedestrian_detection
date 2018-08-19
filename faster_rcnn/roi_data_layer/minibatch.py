@@ -12,6 +12,7 @@ import numpy.random as npr
 import cv2
 import os
 
+
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
 from ..fast_rcnn.config import cfg
