@@ -31,9 +31,19 @@ cfg = __C
 # Training options
 #
 
+# Maximal number of gt rois in an image during Training
+__C.MAX_NUM_GT_BOXES = 20
+
 # region proposal network (RPN) or not
 __C.IS_RPN = True
 __C.ANCHOR_SCALES = [8, 16, 32]
+
+# Anchor ratios for RPN
+__C.ANCHOR_RATIOS = [0.5, 1, 2]
+
+# Feature stride for RPN
+__C.FEAT_STRIDE = [16, ]
+
 __C.NCLASSES = 21
 
 # multiscale training and testing
@@ -77,14 +87,18 @@ __C.TRAIN.SCALES = (600,)
 # Max pixel size of the longest side of a scaled input image
 __C.TRAIN.MAX_SIZE = 1000
 
+# Trim size for input images to create minibatch
+__C.TRAIN.TRIM_HEIGHT = 600
+__C.TRAIN.TRIM_WIDTH = 600
+
 # Images to use per minibatch
-__C.TRAIN.IMS_PER_BATCH = 2
+__C.TRAIN.IMS_PER_BATCH = 1
 
 # Minibatch size (number of regions of interest [ROIs])
 __C.TRAIN.BATCH_SIZE = 128
 
 # Fraction of minibatch that is labeled foreground (i.e. class > 0)
-__C.TRAIN.FG_FRACTION = 0.25
+__C.TRAIN.FG_FRACTION = 0.2
 
 # Overlap threshold for a ROI to be considered foreground (if >= FG_THRESH)
 __C.TRAIN.FG_THRESH = 0.5
@@ -166,7 +180,8 @@ __C.TRAIN.RPN_BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # Set to -1.0 to use uniform example weighting
 __C.TRAIN.RPN_POSITIVE_WEIGHT = -1.0
 # __C.TRAIN.RPN_POSITIVE_WEIGHT = 0.5
-
+# For COCO, setting USE_ALL_GT to False will exclude boxes that are flagged as ''iscrowd''
+__C.TRAIN.USE_ALL_GT = True
 
 #
 # Testing options

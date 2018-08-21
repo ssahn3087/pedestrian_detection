@@ -13,10 +13,7 @@ import cv2
 import os
 
 
-# TODO: make fast_rcnn irrelevant
-# >>>> obsolete, because it depends on sth outside of this project
-from ..fast_rcnn.config import cfg
-# <<<< obsolete
+from faster_rcnn.fast_rcnn.config import cfg
 from ..utils.blob import prep_im_for_blob, im_list_to_blob
 
 
@@ -26,74 +23,34 @@ def get_minibatch(roidb, num_classes):
     # Sample random scales to use for each image in this batch
     random_scale_inds = npr.randint(0, high=len(cfg.TRAIN.SCALES),
                                     size=num_images)
-    assert(cfg.TRAIN.BATCH_SIZE % num_images == 0), \
+    assert (cfg.TRAIN.BATCH_SIZE % num_images == 0), \
         'num_images ({}) must divide BATCH_SIZE ({})'. \
-        format(num_images, cfg.TRAIN.BATCH_SIZE)
-    rois_per_image = cfg.TRAIN.BATCH_SIZE / num_images
-    # Set the number of foreground images : class > 0
-    fg_rois_per_image = np.round(cfg.TRAIN.FG_FRACTION * rois_per_image)
+            format(num_images, cfg.TRAIN.BATCH_SIZE)
 
     # Get the input image blob, formatted for caffe
     im_blob, im_scales = _get_image_blob(roidb, random_scale_inds)
 
     blobs = {'data': im_blob}
 
-    if cfg.TRAIN.HAS_RPN:
-        # Faster RCNN takes one image to batch cf. Fast RCNN : 2 images per batch
-        assert len(im_scales) == 1, "Single batch only"
-        assert len(roidb) == 1, "Single batch only"
-        # gt boxes: (x1, y1, x2, y2, cls)
+    assert len(im_scales) == 1, "Single batch only"
+    assert len(roidb) == 1, "Single batch only"
+
+    # gt boxes: (x1, y1, x2, y2, cls)
+    if cfg.TRAIN.USE_ALL_GT:
+        # Include all ground truth boxes
         gt_inds = np.where(roidb[0]['gt_classes'] != 0)[0]
-        gt_boxes = np.empty((len(gt_inds), 5), dtype=np.float32)
-        gt_boxes[:, 0:4] = roidb[0]['boxes'][gt_inds, :] * im_scales[0]
-        gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
-        blobs['gt_boxes'] = gt_boxes
-        blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]  \
-            if 'gt_ishard' in roidb[0] else np.zeros(gt_inds.size, dtype=int)
-        # blobs['gt_ishard'] = roidb[0]['gt_ishard'][gt_inds]
-        # dontcare areas is not used in Faster RCNN implementation
-        blobs['dontcare_areas'] = roidb[0]['dontcare_areas'] * im_scales[0] \
-            if 'dontcare_areas' in roidb[0] else np.zeros([0, 4], dtype=float)
-        blobs['im_info'] = np.array(
-            [[im_blob.shape[1], im_blob.shape[2], im_scales[0]]],
-            dtype=np.float32)
-        blobs['im_name'] = os.path.basename(roidb[0]['image'])
+    else:
+        # For the COCO ground truth boxes, exclude the ones that are ''iscrowd''
+        gt_inds = np.where((roidb[0]['gt_classes'] != 0) & np.all(roidb[0]['gt_overlaps'].toarray() > -1.0, axis=1))[0]
+    gt_boxes = np.empty((len(gt_inds), 5), dtype=np.float32)
+    gt_boxes[:, 0:4] = roidb[0]['boxes'][gt_inds, :] * im_scales[0]
+    gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
+    blobs['gt_boxes'] = gt_boxes
+    blobs['im_info'] = np.array(
+        [[im_blob.shape[1], im_blob.shape[2], im_scales[0]]],
+        dtype=np.float32)
 
-    else: # not using RPN
-        # Now, build the region of interest and label blobs
-        rois_blob = np.zeros((0, 5), dtype=np.float32)
-        labels_blob = np.zeros((0), dtype=np.float32)
-        bbox_targets_blob = np.zeros((0, 4 * num_classes), dtype=np.float32)
-        bbox_inside_blob = np.zeros(bbox_targets_blob.shape, dtype=np.float32)
-        # all_overlaps = []
-        for im_i in range(num_images):
-            labels, overlaps, im_rois, bbox_targets, bbox_inside_weights \
-                = _sample_rois(roidb[im_i], fg_rois_per_image, rois_per_image,
-                               num_classes)
-
-            # Add to RoIs blob
-            rois = _project_im_rois(im_rois, im_scales[im_i])
-            batch_ind = im_i * np.ones((rois.shape[0], 1))
-            rois_blob_this_image = np.hstack((batch_ind, rois))
-            rois_blob = np.vstack((rois_blob, rois_blob_this_image))
-
-            # Add to labels, bbox targets, and bbox loss blobs
-            labels_blob = np.hstack((labels_blob, labels))
-            bbox_targets_blob = np.vstack((bbox_targets_blob, bbox_targets))
-            bbox_inside_blob = np.vstack((bbox_inside_blob, bbox_inside_weights))
-            # all_overlaps = np.hstack((all_overlaps, overlaps))
-
-        # For debug visualizations
-        # _vis_minibatch(im_blob, rois_blob, labels_blob, all_overlaps)
-
-        blobs['rois'] = rois_blob
-        blobs['labels'] = labels_blob
-
-        if cfg.TRAIN.BBOX_REG:
-            blobs['bbox_targets'] = bbox_targets_blob
-            blobs['bbox_inside_weights'] = bbox_inside_blob
-            blobs['bbox_outside_weights'] = \
-                np.array(bbox_inside_blob > 0).astype(np.float32)
+    blobs['img_id'] = roidb[0]['img_id']
 
     return blobs
 

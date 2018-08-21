@@ -111,9 +111,9 @@ class CaltechPedestrians(imdb):
         gt_classes[ix] = cls
         overlaps[ix, cls] = 1.0
         seg_areas[ix] = w * h
-        diffc = unit_frame['occl']
-        difficult = 0 if diffc == None else diffc
-        ishards[ix] = difficult
+        #diffc = unit_frame['occl']
+        #difficult = 0 if diffc == None else diffc
+        ishards[ix] = 0
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
         return {'boxes': boxes,
@@ -171,9 +171,10 @@ class CaltechPedestrians(imdb):
                 unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
                 pos = unit_frame['pos']
                 label = unit_frame['lbl']
+                occl = int(unit_frame['occl'])
                 area = float(pos[2]) * float(pos[3])
                 # take label == 'person' / areas > 200.0
-                if label != 'person' or area < self.area_thresh: continue
+                if label != 'person' or area < self.area_thresh or occl == 1: continue
                 else:
                     index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
                     processed_image_index.append(index)

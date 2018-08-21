@@ -1,16 +1,16 @@
 import os
 import torch
 import numpy as np
-import gc
+from torch.autograd import Variable
 from datetime import datetime
-from torch.autograd import backward
 from faster_rcnn import network
-from faster_rcnn.faster_rcnn import FasterRCNN, RPN
+from faster_rcnn.network import init_data, data_to_variable
+from faster_rcnn.faster_rcnn import FasterRCNN
 from faster_rcnn.utils.timer import Timer
 
-import faster_rcnn.roi_data_layer.roidb as rdl_roidb
-from faster_rcnn.roi_data_layer.layer import RoIDataLayer
-from faster_rcnn.datasets.factory import get_imdb
+from faster_rcnn.roi_data_layer.sampler import sampler
+from faster_rcnn.roi_data_layer.roidb import extract_roidb
+from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 
 try:
@@ -41,8 +41,8 @@ cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
 output_dir = 'models/saved_model3'
 
-start_step = 0
-end_step = 100000
+start_epoch = 1
+end_epoch = 100
 lr_decay_steps = {60000, 80000 }
 lr_decay = 1./10
 
@@ -59,6 +59,7 @@ if rand_seed is not None:
 
 # load config
 cfg_from_file(cfg_file)
+batch_size = cfg.TRAIN.IMS_PER_BATCH
 lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
 weight_decay = cfg.TRAIN.WEIGHT_DECAY
@@ -66,28 +67,23 @@ disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
 
 # load data        # PASCAL VOC 2007 : Total 5011 images, 15662 objects
-imdb = get_imdb(imdb_name)
-rdl_roidb.prepare_roidb(imdb)
-roidb = imdb.roidb
-
-data_layer = RoIDataLayer(roidb, imdb.num_classes)
+imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
+train_size = len(roidb)
+sampler_batch = sampler(train_size, batch_size)
+dataset = roibatchLoader(roidb, ratio_list, ratio_index, batch_size,
+                                                        imdb.num_classes, training=True)
+dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
+                                         sampler=sampler_batch, num_workers=0)
 
 
 # load net
 net = FasterRCNN(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
 network.load_net_pedestrians(pretrained_model, net)
-# model_file = '/media/longc/Data/models/VGGnet_fast_rcnn_iter_70000.h5'
-# model_file = 'models/saved_model3/faster_rcnn_60000.h5'
-# network.load_net(model_file, net)
-# exp_name = 'vgg16_02-19_13-24'
-# start_step = 60001
-# lr /= 10.
-# network.weights_normal_init([net.bbox_fc, net.score_fc, net.fc6, net.fc7], dev=0.01)
+blob = init_data(is_cuda=True)
 
-net.cuda()
 # set net to be prepared to train
-net.train()
+net.cuda()
 
 params = list(net.parameters())
 # optimizer = torch.optim.Adam(params[-8:], lr=lr)
@@ -109,89 +105,90 @@ if use_tensorboard:
     else:
         exp = cc.open_experiment(exp_name)
 
+
+
+iters_per_epoch = int(train_size / batch_size)
 # training
 train_loss = 0
-tp, tf, fg, bg = 0., 0., 0, 0
 step_cnt = 0
+cnt = 0
 re_cnt = False
 t = Timer()
 t.tic()
 
-for step in range(start_step, end_step+1):
+for epoch in range(start_epoch, end_epoch+1):
 
-    # get one batch
-    blobs = data_layer.forward()
+    tp, tf, fg, bg = 0., 0., 0, 0
+    net.train()
+    data_iter = iter(dataloader)
+    for step in range(iters_per_epoch):
 
-    im_data = blobs['data']
-    im_info = blobs['im_info']
-    gt_boxes = blobs['gt_boxes']
-    gt_ishard = blobs['gt_ishard']
-    dontcare_areas = blobs['dontcare_areas']
+        # get one batch
+        data = next(data_iter)
+        (im_data, im_info, gt_boxes, num_boxes) = data_to_variable(blob, data)
 
-    # forward
-    net(im_data, im_info, gt_boxes, gt_ishard, dontcare_areas)
-    loss = net.loss + net.rpn.loss
-
-    if _DEBUG:
-        tp += float(net.tp)
-        tf += float(net.tf)
-        fg += net.fg_cnt
-        bg += net.bg_cnt
-        if fg == 0 :
-            fg = 1
-
-    train_loss += loss.data[0]
-    step_cnt += 1
-
-    # backward
-    optimizer.zero_grad() # clear grad
-    loss.backward()
-    network.clip_gradient(net, 10.)
-    optimizer.step()
-
-
-    if step % disp_interval == 0:
-        duration = t.toc(average=False)
-        fps = step_cnt / duration
-
-        log_text = 'step %d, image: %s, loss: %.4f, fps: %.2f (%.2fs per batch)' % (
-            step, blobs['im_name'], train_loss / step_cnt, fps, 1./fps)
-        log_print(log_text, color='green', attrs=['bold'])
-
+        # forward
+        net.zero_grad()
+        net(im_data, im_info, gt_boxes, num_boxes)
+        loss = net.loss + net.rpn.loss
+        del data, im_data, im_info, gt_boxes, num_boxes
         if _DEBUG:
+            tp += float(net.tp)
+            tf += float(net.tf)
+            fg += net.fg_cnt
+            bg += net.bg_cnt
 
-            log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
-            log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
-                net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
-                net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
-            )
-        re_cnt = True
+        train_loss += loss.data[0]
+        step_cnt += 1
+        cnt += 1
 
-    if use_tensorboard and step % log_interval == 0:
-        exp.add_scalar_value('train_loss', train_loss / step_cnt, step=step)
-        exp.add_scalar_value('learning_rate', lr, step=step)
-        if _DEBUG:
-            exp.add_scalar_value('true_positive', tp/fg*100., step=step)
-            exp.add_scalar_value('true_negative', tf/bg*100., step=step)
-            losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()[0]),
-                      'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()[0]),
-                      'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()[0]),
-                      'rcnn_box': float(net.loss_box.data.cpu().numpy()[0])}
-            exp.add_scalar_dict(losses, step=step)
+        # backward
+        optimizer.zero_grad() # clear grad
+        loss.backward()
+        network.clip_gradient(net, 10.)
+        optimizer.step()
 
-    if (step % 10000 == 0) and step > 0:
-        save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(step))
-        network.save_net(save_name, net)
-        print('save model: {}'.format(save_name))
-    if step in lr_decay_steps:
-        lr *= lr_decay
-        optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
+        if step % disp_interval == 0:
+            duration = t.toc(average=False)
+            fps = step_cnt / duration
 
-    if re_cnt:
-        tp, tf, fg, bg = 0., 0., 0, 0
-        train_loss = 0
-        step_cnt = 0
-        t.tic()
-        re_cnt = False
+            log_text = 'step %d, loss: %.4f, fps: %.2f (%.2fs per batch) --[epoch %2d] --[iter %4d/%4d]' % (
+                step, train_loss / step_cnt, fps, 1./fps, epoch, step, iters_per_epoch)
+            log_print(log_text, color='green', attrs=['bold'])
+
+            if _DEBUG:
+
+                log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
+                log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
+                    net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
+                    net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
+                )
+            re_cnt = True
+
+        if use_tensorboard and cnt % log_interval == 0:
+            exp.add_scalar_value('train_loss', train_loss / step_cnt, step=cnt)
+            exp.add_scalar_value('learning_rate', lr, step=cnt)
+            if _DEBUG:
+                exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)
+                exp.add_scalar_value('true_negative', tf/bg*100., step=cnt)
+                losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()[0]),
+                          'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()[0]),
+                          'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()[0]),
+                          'rcnn_box': float(net.loss_box.data.cpu().numpy()[0])}
+                exp.add_scalar_dict(losses, step=cnt)
+
+        if cnt % 10000 == 0 and cnt > 0 :
+            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(cnt))
+            network.save_net(save_name, net)
+            print('save model: {}'.format(save_name))
+        if cnt in lr_decay_steps:
+            lr *= lr_decay
+            optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
+
+        if re_cnt:
+            train_loss = 0
+            step_cnt = 0
+            t.tic()
+            re_cnt = False
 
 

@@ -35,13 +35,8 @@ class VGG16(nn.Module):
                                    Conv2d(512, 512, 3, same_padding=True, bn=bn))
 
     def forward(self, im_data):
-        # im_data, im_scales = get_blobs(image)
-        # im_info = np.array(
-        #     [[im_data.shape[1], im_data.shape[2], im_scales[0]]],
-        #     dtype=np.float32)
-        # data = Variable(torch.from_numpy(im_data)).cuda()
-        # x = data.permute(0, 3, 1, 2)
 
+        im_data = im_data.permute(0, 2, 3, 1).contiguous()
         x = self.conv1(im_data)
         x = self.conv2(x)
         x = self.conv3(x)

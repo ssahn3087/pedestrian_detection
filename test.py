@@ -7,7 +7,7 @@ import numpy as np
 from faster_rcnn import network
 from faster_rcnn.faster_rcnn import FasterRCNN, RPN
 from faster_rcnn.utils.timer import Timer
-from faster_rcnn.fast_rcnn.nms_wrapper import nms
+from faster_rcnn.nms.nms_wrapper import nms
 
 from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 from faster_rcnn.datasets.factory import get_imdb
