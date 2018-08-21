@@ -43,7 +43,7 @@ output_dir = 'models/saved_model3'
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_steps = {60000, 80000 }
+lr_decay_step = 5
 lr_decay = 1./10
 
 rand_seed = 1024
@@ -65,7 +65,7 @@ momentum = cfg.TRAIN.MOMENTUM
 weight_decay = cfg.TRAIN.WEIGHT_DECAY
 disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
-
+save_interval = (cfg.TRAIN.SNAPSHOT_ITERS / batch_size)
 # load data        # PASCAL VOC 2007 : Total 5011 images, 15662 objects
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
 train_size = len(roidb)
@@ -120,6 +120,9 @@ for epoch in range(start_epoch, end_epoch+1):
 
     tp, tf, fg, bg = 0., 0., 0, 0
     net.train()
+    if epoch % lr_decay_step == 0:
+        lr *= lr_decay
+        optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
     data_iter = iter(dataloader)
     for step in range(iters_per_epoch):
 
@@ -177,13 +180,10 @@ for epoch in range(start_epoch, end_epoch+1):
                           'rcnn_box': float(net.loss_box.data.cpu().numpy()[0])}
                 exp.add_scalar_dict(losses, step=cnt)
 
-        if cnt % 10000 == 0 and cnt > 0 :
-            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(cnt))
+        if cnt % save_interval == 0 and cnt > 0:
+            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(cnt * batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
-        if cnt in lr_decay_steps:
-            lr *= lr_decay
-            optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
 
         if re_cnt:
             train_loss = 0

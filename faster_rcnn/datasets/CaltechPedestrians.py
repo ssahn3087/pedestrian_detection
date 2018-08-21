@@ -68,26 +68,40 @@ class CaltechPedestrians(imdb):
             if os.path.getsize(cache_file) > 0:
                 with open(cache_file, 'rb') as fid:
                     roidb = pickle.load(fid)
+                self.update_image_index(roidb)
                 print ('{} gt roidb loaded from {}'.format(self.name, cache_file))
                 return roidb
         except FileNotFoundError as e:
             print(str(e))
             gt_roidb = [self._load_pedestrian_annotation(index)
                         for index in self.image_index]
-            gt_roidb = self._remove_None(gt_roidb)
+            gt_roidb = self.remove_none(gt_roidb)
             with open(cache_file, 'wb') as fid:
                 pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
             return gt_roidb
 
-    def _remove_None(self, gt_roidb):
+    def update_image_index(self, roidb):
+        image_set_file = self.image_path + "/ref.txt"
+        f = open(image_set_file, 'r')
+        lines = f.readlines()
+        image_index = [line.strip() for line in lines]
+        f.close()
+        self._image_index = image_index
+        assert len(self._image_index) == len(roidb), 'Create cache file again, ref.txt has been damaged'
+
+    def remove_none(self, gt_roidb):
         roidb = [db for db in gt_roidb if db is not None]
         image_index =[]
-        for i, db in enumerate(gt_roidb):
-            if db is not None:
-                image_index.append(self._image_index[i])
+        image_set_file = self.image_path + "/ref.txt"
+        with open(image_set_file, 'w') as f:
+            for i, db in enumerate(gt_roidb):
+                if db is not None:
+                    image_index.append(self._image_index[i])
+                    f.write(self._image_index[i]+'\n')
         self._image_index = image_index
-        assert len(self._image_index) == len(roidb)
+        assert len(self._image_index) == len(roidb), \
+            'fatal error: the length of _image_index must be same with roidb'
         print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
                                             .format(len(roidb), self.scene_per_episode_max))
         return roidb
@@ -163,11 +177,6 @@ class CaltechPedestrians(imdb):
         """
         Load the indexes listed in this dataset's image set file.
         """
-        # Example path to image set file:
-        # CaltechPedestrians/images/
-        # image_set_file = self.image_path + "/ref.txt"
-        # assert os.path.exists(image_set_file), \
-        #     'Path does not exist: {}'.format(image_set_file)
 
         if (self.area_thresh is not None) or (self.area_thresh != 0):
             print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))

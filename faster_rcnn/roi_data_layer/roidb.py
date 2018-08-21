@@ -105,7 +105,7 @@ def extract_roidb(imdb_names, training=True):
 
     def get_roidb(imdb_name):
         imdb = get_imdb(imdb_name)
-        print('\n\n')
+        print('----------------------------------')
         print('Loaded dataset `{:s}` for training'.format(imdb.name))
         imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
         roidb = get_training_roidb(imdb)
@@ -122,8 +122,8 @@ def extract_roidb(imdb_names, training=True):
     else:
         imdb = get_imdb(imdb_names)
 
-    if training:
-        roidb = filter_roidb(roidb)
+    #if training:
+    #    roidb = filter_roidb(roidb)
 
     ratio_list, ratio_index = rank_roidb_ratio(roidb)
 
