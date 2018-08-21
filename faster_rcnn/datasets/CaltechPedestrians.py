@@ -74,46 +74,60 @@ class CaltechPedestrians(imdb):
             print(str(e))
             gt_roidb = [self._load_pedestrian_annotation(index)
                         for index in self.image_index]
+            gt_roidb = self._remove_None(gt_roidb)
             with open(cache_file, 'wb') as fid:
                 pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
             return gt_roidb
+
+    def _remove_None(self, gt_roidb):
+        roidb = [db for db in gt_roidb if db is not None]
+        image_index =[]
+        for i, db in enumerate(gt_roidb):
+            if db is not None:
+                image_index.append(self._image_index[i])
+        self._image_index = image_index
+        assert len(self._image_index) == len(roidb)
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
+                                            .format(len(roidb), self.scene_per_episode_max))
+        return roidb
 
     def _load_pedestrian_annotation(self, index):
 
         [i, fid, set_name, video_name] = index.split("/")[-4:]
 
         # Load data from a data frame
-        unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
-        pos = np.array(unit_frame['pos'], dtype=np.float)
-        label = unit_frame['lbl']
-        # Make pixel indexes 0-based
-        l = pos[0] - 1
-        t = pos[1] - 1
-        w = pos[2]
-        h = pos[3]
+        objs = self.annotations[set_name][video_name]['frames'][fid]
 
-        # num_obj = 1 only considering one person
-        num_objs = 1
+        # Check abnormal data and Remove
+        objs = [obj for obj in objs if self.object_condition_satisfied(obj, index)]
+
+        num_objs = len(objs)
+        if num_objs == 0:
+            return None
         boxes = np.zeros((num_objs, 4), dtype=np.uint16)
         gt_classes = np.zeros((num_objs), dtype=np.int32)
         overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
         # "Seg" area for pedestrian is just the box area
         seg_areas = np.zeros((num_objs), dtype=np.float32)
         ishards = np.zeros((num_objs), dtype=np.int32)
-
-
-        # all indexes are 0 in this dataset
-        ix = num_objs - 1
-        # boxes, gt_classes, seg_areas, ishards, overlaps
-        boxes[ix, :] = [l, t, l + w, t + h]
-        cls = self._class_to_ind[label]
-        gt_classes[ix] = cls
-        overlaps[ix, cls] = 1.0
-        seg_areas[ix] = w * h
-        #diffc = unit_frame['occl']
-        #difficult = 0 if diffc == None else diffc
-        ishards[ix] = 0
+        for ix, obj in enumerate(objs):
+            pos = np.round(np.array(obj['pos'], dtype=np.float32))
+            label = obj['lbl']
+            # Make pixel indexes 0-based
+            l = pos[0] - 1
+            t = pos[1] - 1
+            w = pos[2]
+            h = pos[3]
+            # boxes, gt_classes, seg_areas, ishards, overlaps
+            boxes[ix, :] = [l, t, l + w, t + h]
+            cls = self._class_to_ind[label]
+            gt_classes[ix] = cls
+            overlaps[ix, cls] = 1.0
+            seg_areas[ix] = w * h
+            # diffc = unit_frame['occl']
+            # difficult = 0 if diffc == None else diffc
+            ishards[ix] = 0
         overlaps = scipy.sparse.csr_matrix(overlaps)
 
         return {'boxes': boxes,
@@ -151,14 +165,14 @@ class CaltechPedestrians(imdb):
         """
         # Example path to image set file:
         # CaltechPedestrians/images/
-        image_set_file = self.image_path + "/ref.txt"
-        assert os.path.exists(image_set_file), \
-            'Path does not exist: {}'.format(image_set_file)
+        # image_set_file = self.image_path + "/ref.txt"
+        # assert os.path.exists(image_set_file), \
+        #     'Path does not exist: {}'.format(image_set_file)
 
         if (self.area_thresh is not None) or (self.area_thresh != 0):
             print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
-        processed_image_index = []
+        image_index = []
 
         episodes = self.get_epsiode()
         # unit is tuple (set_name, video_name, str, end)
@@ -168,33 +182,28 @@ class CaltechPedestrians(imdb):
             indices = np.sort(npr.choice(len(fids),self.scene_per_episode_max, replace=False)) \
                 if len(fids) > self.scene_per_episode_max else np.arange(len(fids))
             for fid in np.asarray(fids)[indices]:
-                unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
-                pos = unit_frame['pos']
-                label = unit_frame['lbl']
-                occl = int(unit_frame['occl'])
-                area = float(pos[2]) * float(pos[3])
-                # take label == 'person' / areas > 200.0
-                if label != 'person' or area < self.area_thresh or occl == 1: continue
-                else:
-                    index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
-                    processed_image_index.append(index)
-                    i += 1
-        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
-                                    .format(i, self.scene_per_episode_max))
-        # this method takes all images (# 91199) as input
-        # with open(image_set_file) as f:
-        #     for x in f.readlines():
-        #         index = x.strip()
-        #         [i, fid, set_name, video_name] = index.split("/")[-4:]
-        #         unit_frame = self.annotations[set_name][video_name]['frames'][fid][0]
-        #         pos = unit_frame['pos']
-        #         label = unit_frame['lbl']
-        #         area = float(pos[2]) * float(pos[3])
-        #         # take label == 'person' / areas > 200.0
-        #         if label != 'person' or area < self.area_thresh: continue
-        #         else: processed_image_index.append(index)
+                index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
+                image_index.append(index)
+                i += 1
 
-        return processed_image_index
+        return image_index
+
+    def object_condition_satisfied(self, obj, index):
+        import PIL
+        image_path = self.image_path_from_index(index)
+        size = PIL.Image.open(image_path).size
+        pos = np.round(np.array(obj['pos'], dtype=np.float32))
+        label = obj['lbl']
+        occl = int(obj['occl'])
+        area = float(pos[2] * pos[3])
+        # take label == 'person' / areas > 200.0
+        if label != 'person' or area < self.area_thresh or occl == 1:
+            return False
+        elif pos[0] + pos[2] > size[0] or pos[1] + pos[3] > size[1] \
+                or (pos < 0).any() or pos.size < 4:
+            return False
+        else:
+            return True
 
     def get_epsiode(self):
         episodes = defaultdict(list)

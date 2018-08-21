@@ -2,21 +2,24 @@ import os
 import torch
 
 import numpy as np
-import h5py
-from faster_rcnn import network
-from faster_rcnn.faster_rcnn import FasterRCNN, RPN
+
 from faster_rcnn.datasets.factory import get_imdb
-from faster_rcnn.utils.timer import Timer
 
-
-#pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
-#imdb_name = 'voc_2007_trainval'
-#imdb = get_imdb(imdb_name)
 from faster_rcnn.fast_rcnn.config import cfg
-#cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-#cfg_from_file(cfg_file)
 
-print(cfg.TRAIN.FG_FRACTION)
+pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
+imdb_name = 'CaltechPedestrians'
+imdb = get_imdb(imdb_name)
+index = '2601/1053/set00/V001'
+data = imdb._load_pedestrian_annotation(index)
+import PIL
+#print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
+#                                    .format(i, self.scene_per_episode_max))
+
+path = imdb.image_path_from_index(index)
+print(path)
+#print(data)
+
 def save_net(fname, net):
     import h5py
     h5f = h5py.File(fname, mode='w')
