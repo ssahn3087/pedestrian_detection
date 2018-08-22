@@ -209,7 +209,8 @@ class FasterRCNN(nn.Module):
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
-            rpn_loss_cls = 0
+            self.cross_entropy =0
+            self.loss_box = 0
 
         rois = Variable(rois)
 
