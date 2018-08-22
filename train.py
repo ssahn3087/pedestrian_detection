@@ -34,8 +34,8 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-#imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians'
+imdb_name = 'voc_2007_trainval'
+#imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
