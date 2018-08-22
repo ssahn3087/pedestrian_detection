@@ -88,6 +88,8 @@ class CaltechPedestrians(imdb):
         image_index = [line.strip() for line in lines]
         f.close()
         self._image_index = image_index
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
+              .format(len(roidb), self.scene_per_episode_max))
         assert len(self._image_index) == len(roidb), 'Create cache file again, ref.txt has been damaged'
 
     def remove_none(self, gt_roidb):
@@ -100,10 +102,10 @@ class CaltechPedestrians(imdb):
                     image_index.append(self._image_index[i])
                     f.write(self._image_index[i]+'\n')
         self._image_index = image_index
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
+              .format(len(roidb), self.scene_per_episode_max))
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
-        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
-                                            .format(len(roidb), self.scene_per_episode_max))
         return roidb
 
     def _load_pedestrian_annotation(self, index):
