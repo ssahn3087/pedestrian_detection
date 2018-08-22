@@ -31,7 +31,7 @@ class imdb(object):
         self._num_classes = 0
         self._classes = []
         self._image_index = []
-        self._obj_proposer = 'selective_search'
+        self._obj_proposer = 'gt'
         self._roidb = None
         print (self.default_roidb)
         self._roidb_handler = self.default_roidb

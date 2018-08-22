@@ -61,8 +61,7 @@ class RPN(nn.Module):
         return self.cross_entropy + self.loss_box * 10
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
-        #im_data = network.np_to_variable(im_data, is_cuda=True)
-        im_data = im_data.permute(0, 3, 1, 2)
+
         features = self.features(im_data)
         batch_size = features.size(0)
         rpn_conv1 = self.conv1(features)
@@ -210,7 +209,8 @@ class FasterRCNN(nn.Module):
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
-            rpn_loss_cls = 0
+            self.cross_entropy = 0
+            self.loss_box = 0
 
         rois = Variable(rois)
 

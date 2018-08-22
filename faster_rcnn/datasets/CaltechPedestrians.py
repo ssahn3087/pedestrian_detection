@@ -15,7 +15,7 @@ class CaltechPedestrians(imdb):
         imdb.__init__(self, name)
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 10
+        self.scene_per_episode_max = 5
         self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -88,6 +88,8 @@ class CaltechPedestrians(imdb):
         image_index = [line.strip() for line in lines]
         f.close()
         self._image_index = image_index
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
+              .format(len(roidb), self.scene_per_episode_max))
         assert len(self._image_index) == len(roidb), 'Create cache file again, ref.txt has been damaged'
 
     def remove_none(self, gt_roidb):
@@ -100,10 +102,11 @@ class CaltechPedestrians(imdb):
                     image_index.append(self._image_index[i])
                     f.write(self._image_index[i]+'\n')
         self._image_index = image_index
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
+              .format(len(roidb), self.scene_per_episode_max))
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
-        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images'\
-                                            .format(len(roidb), self.scene_per_episode_max))
+
         return roidb
 
     def _load_pedestrian_annotation(self, index):
@@ -198,9 +201,9 @@ class CaltechPedestrians(imdb):
         return image_index
 
     def object_condition_satisfied(self, obj, index):
-        import PIL
+        from PIL import Image
         image_path = self.image_path_from_index(index)
-        size = PIL.Image.open(image_path).size
+        (width, height) = Image.open(image_path).size
         pos = np.round(np.array(obj['pos'], dtype=np.float32))
         label = obj['lbl']
         occl = int(obj['occl'])
@@ -208,7 +211,7 @@ class CaltechPedestrians(imdb):
         # take label == 'person' / areas > 200.0
         if label != 'person' or area < self.area_thresh or occl == 1:
             return False
-        elif pos[0] + pos[2] > size[0] or pos[1] + pos[3] > size[1] \
+        elif pos[0] + pos[2] > width or pos[1] + pos[3] > height \
                 or (pos < 0).any() or pos.size < 4:
             return False
         else:

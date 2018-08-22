@@ -21,8 +21,8 @@ import xml.etree.ElementTree as ET
 
 from .imdb import imdb
 from .imdb import ROOT_DIR
-#from .ds_utils import *
-import faster_rcnn.datasets.ds_utils
+from .ds_utils import *
+
 from .voc_eval import voc_eval
 
 
@@ -74,6 +74,13 @@ class pascal_voc(imdb):
             'VOCdevkit path does not exist: {}'.format(self._devkit_path)
         assert os.path.exists(self._data_path), \
             'Path does not exist: {}'.format(self._data_path)
+
+
+    def image_id_at(self, i):
+        """
+        Return the absolute path to image i in the image sequence.
+        """
+        return i
 
     def image_path_at(self, i):
         """

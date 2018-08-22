@@ -36,7 +36,6 @@ class VGG16(nn.Module):
 
     def forward(self, im_data):
 
-        im_data = im_data.permute(0, 2, 3, 1).contiguous()
         x = self.conv1(im_data)
         x = self.conv2(x)
         x = self.conv3(x)
