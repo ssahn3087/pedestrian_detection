@@ -264,8 +264,10 @@ class FasterRCNN(nn.Module):
             self.tf = torch.sum(tf)
             self.fg_cnt = fg_cnt
             self.bg_cnt = bg_cnt
-
-        cross_entropy = F.cross_entropy(cls_score, rois_label).mean()
+        ce_weights = torch.ones(cls_score.size()[1])
+        ce_weights[0] = float(fg_cnt) / bg_cnt
+        ce_weights = ce_weights.cuda()
+        cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights)
 
         loss_box = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws).mean()
 

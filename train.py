@@ -34,8 +34,9 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-#imdb_name = 'CaltechPedestrians'
+
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
@@ -160,7 +161,7 @@ for epoch in range(start_epoch, end_epoch+1):
             log_print(log_text, color='green', attrs=['bold'])
 
             if _DEBUG:
-
+                print(tp, fg)
                 log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
                 log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
                     net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
