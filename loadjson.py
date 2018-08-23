@@ -3,6 +3,7 @@ import json
 import numpy as np
 from faster_rcnn.fast_rcnn.config import cfg
 import cv2
+from PIL import Image
 import glob
 from collections import defaultdict
 
@@ -26,6 +27,7 @@ def readAnno(filename):
 if __name__ == "__main__":
     js = readAnno(anno_file)
     label_set = []
+    size_set = []
     episode = defaultdict(list)
     for set_path in sorted(glob.glob(img_path + '/set*')):
         set_name = set_path.split("/")[-1]
@@ -38,21 +40,25 @@ if __name__ == "__main__":
                 # [l, t, w, h]
                 pos = np.round(np.asarray(unit[k][0]['pos'], dtype=np.float32))
                 area = pos[2] * pos[3]
-                if (label not in label_set):
-                    label_set.append(label)
+                #if (label not in label_set):
+                #    label_set.append(label)
                 invisible = np.zeros((1, 4), dtype=np.int32)
                 # [x1 y1 x2 y2]
                 coord = [pos[0], pos[1], pos[0] + pos[2], pos[1] + pos[3]]
                 img = video_path + '/' + str(fid) + img_ext
                 _str = unit[k][0]['str']
                 lock = unit[k][0]['lock']
-                if(pos < 0).any() or pos.size < 4:
-                    print(pos)
-                # im = cv2.imread(img, cv2.IMREAD_COLOR)
-                # im = cv2.rectangle(im, (coord[0], coord[1]), (coord[2], coord[3]), (0, 0, 255), 1)
-                # cv2.imshow(str(fid), im)
-                # cv2.waitKey(500)
-                # cv2.destroyAllWindows()
+                #if(pos < 0).any() or pos.size < 4:
+                #    print(pos)
+                img = img_path + set_name + '/' + video_name + '/' + fid + img_ext
+                im = cv2.imread(img, cv2.IMREAD_COLOR)
+                from PIL import Image
+                (width, height) = Image.open(img).size
+                print(coord, width, height)
+                im = cv2.rectangle(im, (coord[0], coord[1]), (coord[2], coord[3]), (0, 0, 255), 1)
+                cv2.imshow(str(fid), im)
+                cv2.waitKey(500)
+                cv2.destroyAllWindows()
 
 
 

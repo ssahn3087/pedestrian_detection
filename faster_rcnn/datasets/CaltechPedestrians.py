@@ -106,6 +106,7 @@ class CaltechPedestrians(imdb):
               .format(len(roidb), self.scene_per_episode_max))
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
+
         return roidb
 
     def _load_pedestrian_annotation(self, index):
@@ -183,26 +184,19 @@ class CaltechPedestrians(imdb):
         if (self.area_thresh is not None) or (self.area_thresh != 0):
             print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
-        image_index = []
-
-        episodes = self.get_epsiode()
-        # unit is tuple (set_name, video_name, str, end)
-        i = 1
-        for key, fids in episodes.items():
-            set_name, video_name = key[:2]
-            indices = np.sort(npr.choice(len(fids),self.scene_per_episode_max, replace=False)) \
-                if len(fids) > self.scene_per_episode_max else np.arange(len(fids))
-            for fid in np.asarray(fids)[indices]:
-                index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
-                image_index.append(index)
-                i += 1
+        image_set_file = self.image_path + "/ref.txt"
+        f = open(image_set_file, 'r')
+        lines = f.readlines()
+        image_index = [line.strip() for line in lines]
+        f.close()
+        self._image_index = image_index
 
         return image_index
 
     def object_condition_satisfied(self, obj, index):
-        import PIL
+        from PIL import Image
         image_path = self.image_path_from_index(index)
-        size = PIL.Image.open(image_path).size
+        (width, height) = Image.open(image_path).size
         pos = np.round(np.array(obj['pos'], dtype=np.float32))
         label = obj['lbl']
         occl = int(obj['occl'])
@@ -210,7 +204,7 @@ class CaltechPedestrians(imdb):
         # take label == 'person' / areas > 200.0
         if label != 'person' or area < self.area_thresh or occl == 1:
             return False
-        elif pos[0] + pos[2] > size[0] or pos[1] + pos[3] > size[1] \
+        elif pos[0] + pos[2] > width or pos[1] + pos[3] > height \
                 or (pos < 0).any() or pos.size < 4:
             return False
         else:

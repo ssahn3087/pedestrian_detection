@@ -65,12 +65,12 @@ momentum = cfg.TRAIN.MOMENTUM
 weight_decay = cfg.TRAIN.WEIGHT_DECAY
 disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
-save_interval = (cfg.TRAIN.SNAPSHOT_ITERS / batch_size)
+save_interval = cfg.TRAIN.SNAPSHOT_ITERS
 # load data        # PASCAL VOC 2007 : Total 5011 images, 15662 objects
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
 train_size = len(roidb)
 sampler_batch = sampler(train_size, batch_size)
-dataset = roibatchLoader(roidb, ratio_list, ratio_index, batch_size,
+dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
                                                         imdb.num_classes, training=True)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                          sampler=sampler_batch, num_workers=0)
@@ -181,12 +181,13 @@ for epoch in range(start_epoch, end_epoch+1):
                 exp.add_scalar_dict(losses, step=cnt)
 
         if cnt % save_interval == 0 and cnt > 0:
-            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}.h5'.format(cnt * batch_size))
+            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}_b{}.h5'.format(cnt , batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 
         if re_cnt:
             train_loss = 0
+            tp, tf, fg, bg = 0., 0., 0, 0
             step_cnt = 0
             t.tic()
             re_cnt = False

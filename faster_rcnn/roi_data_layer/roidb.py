@@ -6,7 +6,7 @@ import faster_rcnn.datasets as datasets
 import numpy as np
 from faster_rcnn.fast_rcnn.config import cfg
 from faster_rcnn.datasets.factory import get_imdb
-import PIL
+from PIL import Image
 
 
 
@@ -20,7 +20,7 @@ def prepare_roidb(imdb):
 
     roidb = imdb.roidb
     if not (imdb.name.startswith('coco')):
-        sizes = [PIL.Image.open(imdb.image_path_at(i)).size
+        sizes = [Image.open(imdb.image_path_at(i)).size
                  for i in range(imdb.num_images)]
 
     for i in range(len(imdb.image_index)):
@@ -69,7 +69,7 @@ def rank_roidb_ratio(roidb):
         ratio_list.append(ratio)
 
     ratio_list = np.array(ratio_list)
-    ratio_index = np.argsort(ratio_list)
+    ratio_index = np.argsort(ratio_list) # from small to large
     return ratio_list[ratio_index], ratio_index
 
 
