@@ -258,8 +258,10 @@ class FasterRCNN(nn.Module):
         # for log
         if self.debug:
             maxv, predict = cls_score.data.max(1)
-            self.tp = torch.sum(predict[:fg_cnt].eq(label.data[:fg_cnt])) if fg_cnt > 0 else 0
-            self.tf = torch.sum(predict[fg_cnt:].eq(label.data[fg_cnt:]))
+            tp = (label.data.eq(predict)).eq(label.data.ne(0))
+            tf = (label.data.eq(0)).eq(predict.eq(0))
+            self.tp = torch.sum(tp) if fg_cnt > 0 else 0
+            self.tf = torch.sum(tf)
             self.fg_cnt = fg_cnt
             self.bg_cnt = bg_cnt
 
