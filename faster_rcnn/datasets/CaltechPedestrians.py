@@ -15,7 +15,7 @@ class CaltechPedestrians(imdb):
         imdb.__init__(self, name)
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 15
+        self.scene_per_episode_max = 5
         self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -184,19 +184,12 @@ class CaltechPedestrians(imdb):
         if (self.area_thresh is not None) or (self.area_thresh != 0):
             print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
-        image_index = []
-
-        episodes = self.get_epsiode()
-        # unit is tuple (set_name, video_name, str, end)
-        i = 1
-        for key, fids in episodes.items():
-            set_name, video_name = key[:2]
-            indices = np.sort(npr.choice(len(fids),self.scene_per_episode_max, replace=False)) \
-                if len(fids) > self.scene_per_episode_max else np.arange(len(fids))
-            for fid in np.asarray(fids)[indices]:
-                index = '{}/{}/{}/{}'.format(i, fid, set_name, video_name)
-                image_index.append(index)
-                i += 1
+        image_set_file = self.image_path + "/ref.txt"
+        f = open(image_set_file, 'r')
+        lines = f.readlines()
+        image_index = [line.strip() for line in lines]
+        f.close()
+        self._image_index = image_index
 
         return image_index
 

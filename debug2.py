@@ -17,8 +17,8 @@ from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-#imdb_name = 'CaltechPedestrians'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
@@ -58,8 +58,6 @@ dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
                                          sampler=sampler_batch, num_workers=0)
 
-
-blob = init_data(is_cuda=True)
 from time import sleep
 
 
@@ -87,10 +85,11 @@ for epoch in range(start_epoch, end_epoch+1):
                                   interpolation=cv2.INTER_LINEAR)
                 for i in range(len(boxes)):
                     (x1,y1,x2,y2) = boxes[i,0:4]
-                    print((x1,y1,x2,y2))
-                    im = cv2.rectangle(im, (x1,y1),(x2,y2), (0, 0, 255), 1)
+                    if not (np.array((x1,y1,x2,y2), dtype= np.int)== 0).all():
+                        print((x1,y1,x2,y2), imdb._classes[int(boxes[i,4])])
+                        im = cv2.rectangle(im, (x1,y1),(x2,y2), (0, 0, 255), 1)
                 cv2.imshow(str(id), im)
-                cv2.waitKey(1000)
+                cv2.waitKey(300)
                 cv2.destroyAllWindows()
 
 
@@ -100,3 +99,16 @@ for epoch in range(start_epoch, end_epoch+1):
 
             #input("wait")
             #imdb.image_path_at()
+# for i in range(len(roidb)):
+#     img = roidb[i]['image']
+#     im = cv2.imread(img, cv2.IMREAD_COLOR)
+#     boxes = roidb[i]['boxes']
+#     for j in range(len(boxes)):
+#         (x1, y1, x2, y2) = boxes[j, 0:4]
+#         if not (np.array((x1, y1, x2, y2), dtype=np.int) == 0).all():
+#             print((x1, y1, x2, y2), imdb._classes[roidb[i]['gt_classes'][j]])
+#             im = cv2.rectangle(im, (x1, y1), (x2, y2), (0, 0, 255), 1)
+#         cv2.imshow(str(id), im)
+#         cv2.waitKey(300)
+#         cv2.destroyAllWindows()
+# blob = init_data(is_cuda=True)
