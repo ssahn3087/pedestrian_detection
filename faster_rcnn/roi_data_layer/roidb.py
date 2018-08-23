@@ -69,7 +69,7 @@ def rank_roidb_ratio(roidb):
         ratio_list.append(ratio)
 
     ratio_list = np.array(ratio_list)
-    ratio_index = np.argsort(ratio_list)
+    ratio_index = np.argsort(ratio_list) # from small to large
     return ratio_list[ratio_index], ratio_index
 
 

@@ -187,6 +187,7 @@ for epoch in range(start_epoch, end_epoch+1):
 
         if re_cnt:
             train_loss = 0
+            tp, tf, fg, bg = 0., 0., 0, 0
             step_cnt = 0
             t.tic()
             re_cnt = False
