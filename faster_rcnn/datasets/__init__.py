@@ -21,7 +21,7 @@ from . import factory
 ## NOTE: obsolete
 import os.path as osp
 from .imdb import ROOT_DIR
-from .imdb import MATLAB
+
 
 # http://stackoverflow.com/questions/377017/test-if-executable-exists-in-python
 def _which(program):

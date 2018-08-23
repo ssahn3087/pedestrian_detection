@@ -20,8 +20,6 @@ from faster_rcnn.network import Conv2d, FC
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.vgg16 import VGG16
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
-cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-cfg_from_file(cfg_file)
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
     dets = np.hstack((pred_boxes,
