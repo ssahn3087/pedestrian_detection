@@ -135,18 +135,12 @@ for epoch in range(start_epoch, end_epoch+1):
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
         loss = net.loss + net.rpn.loss
-        # if np.isnan(float(loss.data[0])):
-        #     import cv2
-        #     print(im_data.data)
-        #     print(im_info.data)
-        #     print(gt_boxes.data)
-        #     print(num_boxes.data)
-        #     img_id = data[4]
-        #     img = imdb.image_path_at(img_id)
-        #     cv2.imshow(str(id), img)
-        #     cv2.waitKey()
-        #     cv2.destroyAllWindows()
-        #     raise RuntimeError
+        if np.isnan(float(loss.data[0])) or float(loss.data[0]) > 100.0 :
+            print(im_data.data)
+            print(im_info.data)
+            print(gt_boxes.data)
+            print(num_boxes.data)
+
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)
