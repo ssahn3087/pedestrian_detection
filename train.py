@@ -34,8 +34,8 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-#imdb_name = 'CaltechPedestrians'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians'
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
@@ -80,7 +80,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 # load net
 net = FasterRCNN(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
-network.load_net(pretrained_model, net)
+network.load_net_pedestrians(pretrained_model, net)
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
@@ -136,10 +136,8 @@ for epoch in range(start_epoch, end_epoch+1):
         net(im_data, im_info, gt_boxes, num_boxes)
         loss = net.loss + net.rpn.loss
         if np.isnan(float(loss.data[0])) or float(loss.data[0]) > 100.0 :
-            print(im_data.data)
             print(im_info.data)
             print(gt_boxes.data)
-            print(num_boxes.data)
 
         if _DEBUG:
             tp += float(net.tp)
