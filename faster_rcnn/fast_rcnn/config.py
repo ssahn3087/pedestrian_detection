@@ -67,6 +67,8 @@ __C.TRAIN.STEPSIZE = 50000
 __C.TRAIN.DISPLAY = 10
 __C.TRAIN.LOG_IMAGE_ITERS = 100
 __C.TRAIN.OHEM = False
+__C.TRAIN.BIAS_DECAY = False
+__C.TRAIN.DOUBLE_BIAS = True
 
 # Scales to compute real features
 __C.TRAIN.SCALES_BASE = (0.25, 0.5, 1.0, 2.0, 3.0)
@@ -223,6 +225,27 @@ __C.TEST.RPN_POST_NMS_TOP_N = 300
 # __C.TEST.RPN_POST_NMS_TOP_N = 2000
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TEST.RPN_MIN_SIZE = 16
+
+
+# Resnet
+
+__C.RESNET = edict()
+
+# Option to set if max-pooling is appended after crop_and_resize.
+# if true, the region will be resized to a square of 2xPOOLING_SIZE,
+# then 2x2 max-pooling is applied; otherwise the region will be directly
+# resized to a square of POOLING_SIZE
+__C.RESNET.MAX_POOL = False
+
+# Number of fixed blocks during training, by default the first of all 4 blocks is fixed
+# Range: 0 (none) to 3 (all)
+__C.RESNET.FIXED_BLOCKS = 1
+
+__C.RESNET.IS_TRUE = False
+
+
+
+
 
 #
 # MISC

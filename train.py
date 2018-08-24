@@ -5,7 +5,9 @@ from torch.autograd import Variable
 from datetime import datetime
 from faster_rcnn import network
 from faster_rcnn.network import init_data, data_to_variable
-from faster_rcnn.faster_rcnn import FasterRCNN
+from faster_rcnn.network import train_net_params
+from faster_rcnn.faster_rcnn import FasterRCNN as FasterRCNN_VGG
+from faster_rcnn.faster_rcnn2 import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
 
 from faster_rcnn.roi_data_layer.sampler import sampler
@@ -39,15 +41,17 @@ imdb_name = 'CaltechPedestrians'
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
-pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
+#pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
+pretrained_model = None
 output_dir = 'models/saved_model3'
 
 start_epoch = 1
 end_epoch = 100
 lr_decay_step = 5
 lr_decay = 1./10
-
 rand_seed = 1024
+
+
 _DEBUG = True
 use_tensorboard = False
 remove_all_log = False   # remove all historical experiments in TensorBoard
@@ -60,6 +64,8 @@ if rand_seed is not None:
 
 # load config
 cfg_from_file(cfg_file)
+fg_thresh = cfg.TRAIN.RPN_POSITIVE_OVERLAP
+is_resnet = cfg.RESNET.IS_TRUE
 batch_size = cfg.TRAIN.IMS_PER_BATCH
 lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
@@ -78,17 +84,22 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 
 
 # load net
-net = FasterRCNN(classes=imdb.classes, debug=_DEBUG)
+if is_resnet:
+    model_name = 'resnet50'
+    net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
+else:
+    model_name = 'vgg16'
+    net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
-network.load_net_pedestrians(pretrained_model, net)
+if pretrained_model:
+    network.load_net_pedestrians(pretrained_model, net)
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
 net.cuda()
 
-params = list(net.parameters())
-# optimizer = torch.optim.Adam(params[-8:], lr=lr)
-optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
+params = train_net_params(net, cfg, lr)
+optimizer = torch.optim.SGD(params, momentum=momentum)
 
 
 if not os.path.exists(output_dir):
@@ -123,7 +134,8 @@ for epoch in range(start_epoch, end_epoch+1):
     net.train()
     if epoch % lr_decay_step == 0:
         lr *= lr_decay
-        optimizer = torch.optim.SGD(params[8:], lr=lr, momentum=momentum, weight_decay=weight_decay)
+        params = train_net_params(net, cfg, lr)
+        optimizer = torch.optim.SGD(params, momentum=momentum)
     data_iter = iter(dataloader)
     for step in range(iters_per_epoch):
 
@@ -152,7 +164,8 @@ for epoch in range(start_epoch, end_epoch+1):
         # backward
         optimizer.zero_grad() # clear grad
         loss.backward()
-        network.clip_gradient(net, 10.)
+        if not is_resnet:
+            network.clip_gradient(net, 10.)
         optimizer.step()
 
         if step % disp_interval == 0:
@@ -187,7 +200,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 exp.add_scalar_dict(losses, step=cnt)
 
         if cnt % save_interval == 0 and cnt > 0:
-            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians_{}_b{}.h5'.format(cnt , batch_size))
+            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians_{}_{}_{}_b{}.h5'
+                                     .format(cnt, model_name, fg_thresh, batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 

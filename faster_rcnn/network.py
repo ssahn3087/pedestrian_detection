@@ -185,3 +185,14 @@ def clip_gradient(model, clip_norm):
     for p in model.parameters():
         if p.requires_grad:
             p.grad.mul_(norm)
+
+def train_net_params(net, cfg, lr):
+    params = []
+    for key, value in dict(net.named_parameters()).items():
+        if value.requires_grad:
+            if 'bias' in key:
+                params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1), \
+                            'weight_decay': lr and cfg.TRAIN.WEIGHT_DECAY or 0}]
+            else:
+                params += [{'params': [value], 'lr': lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+    return params
