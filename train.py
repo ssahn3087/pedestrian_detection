@@ -150,7 +150,7 @@ for epoch in range(start_epoch, end_epoch+1):
         if np.isnan(float(loss.data[0])) or float(loss.data[0]) > 100.0 :
             print(im_info.data)
             print(gt_boxes.data)
-
+            print(data[4])
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)

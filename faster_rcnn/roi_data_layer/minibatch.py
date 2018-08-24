@@ -42,9 +42,7 @@ def get_minibatch(roidb, num_classes):
     blobs['im_info'] = np.array(
         [[im_blob.shape[1], im_blob.shape[2], im_scales[0]]],
         dtype=np.float32)
-
     blobs['img_id'] = roidb[0]['img_id']
-
     return blobs
 
 

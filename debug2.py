@@ -77,20 +77,26 @@ for epoch in range(start_epoch, end_epoch+1):
             gt_boxes = data[2]
 
             for i, id in enumerate(img_id):
-                img = imdb.image_path_at(id)
+                img = roidb[id]['image']
                 boxes = gt_boxes.numpy()[i]
-                im_scale = im_info.numpy()[i][2]
-                im = cv2.imread(img, cv2.IMREAD_COLOR)
-                im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale,
-                                  interpolation=cv2.INTER_LINEAR)
-                for i in range(len(boxes)):
-                    (x1,y1,x2,y2) = boxes[i,0:4]
-                    if not (np.array((x1,y1,x2,y2), dtype= np.int)== 0).all():
-                        print((x1,y1,x2,y2), imdb._classes[int(boxes[i,4])])
-                        im = cv2.rectangle(im, (x1,y1),(x2,y2), (0, 0, 255), 1)
-                cv2.imshow(str(id), im)
-                cv2.waitKey(300)
-                cv2.destroyAllWindows()
+                width, height = im_info[i][1], im_info[i][0]
+                if(boxes[:,0] >= width).any() or (boxes[:,2] >= width).any() or \
+                    (boxes[:, 1] >= height).any() or (boxes[:, 3] >= height).any():
+                    print(step)
+                    print(width, height)
+                    im_scale = im_info.numpy()[i][2]
+                    im = cv2.imread(img, cv2.IMREAD_COLOR)
+                    im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale,
+                                      interpolation=cv2.INTER_LINEAR)
+                    print(im.shape[1], im.shape[0])
+                    for i in range(len(boxes)):
+                        (x1,y1,x2,y2) = boxes[i,0:4]
+                        if not (np.array((x1,y1,x2,y2), dtype= np.int)== 0).all():
+                            print((x1,y1,x2,y2), imdb._classes[int(boxes[i,4])])
+                            im = cv2.rectangle(im, (x1,y1),(x2,y2), (0, 0, 255), 1)
+                    cv2.imshow(str(id), im)
+                    cv2.waitKey(50000)
+                    cv2.destroyAllWindows()
 
 
         except RuntimeError as  e:

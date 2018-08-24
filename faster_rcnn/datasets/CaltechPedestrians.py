@@ -10,6 +10,7 @@ from faster_rcnn.datasets.imdb import imdb
 from faster_rcnn.fast_rcnn.config import cfg
 from collections import defaultdict
 
+
 class CaltechPedestrians(imdb):
 
     def __init__(self, name):
@@ -26,8 +27,8 @@ class CaltechPedestrians(imdb):
                          'person')
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self._image_index_default = self._load_image_set_index()
-        self._image_index = None
         self._roidb_handler = self.gt_roidb
+        self._image_index = []
 
     """
     Dataset from : http://www.vision.caltech.edu/Image_Datasets/CaltechPedestrians/
