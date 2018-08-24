@@ -75,7 +75,7 @@ for epoch in range(start_epoch, end_epoch+1):
             img_id = data[4]
             im_info = data[1]
             gt_boxes = data[2]
-            print(step)
+
             for i, id in enumerate(img_id):
                 img = imdb.image_path_at(id)
                 boxes = gt_boxes.numpy()[i]
