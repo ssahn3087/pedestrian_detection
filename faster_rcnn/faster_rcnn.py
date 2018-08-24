@@ -258,16 +258,17 @@ class FasterRCNN(nn.Module):
         # for log
         if self.debug:
             maxv, predict = cls_score.data.max(1)
-            tp = (label.data.eq(predict)).eq(label.data.ne(0))
-            tf = (label.data.eq(0)).eq(predict.eq(0))
+            tp = label.data.eq(predict) * label.data.ne(0)
+            tf = label.data.eq(0)*predict.eq(0)
             self.tp = torch.sum(tp) if fg_cnt > 0 else 0
             self.tf = torch.sum(tf)
             self.fg_cnt = fg_cnt
             self.bg_cnt = bg_cnt
-        ce_weights = torch.ones(cls_score.size()[1])
+
+        ce_weights = torch.ones(cls_score.size(1))
         ce_weights[0] = float(fg_cnt) / bg_cnt
         ce_weights = ce_weights.cuda()
-        cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights)
+        cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights).mean()
 
         loss_box = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws).mean()
 
