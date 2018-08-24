@@ -187,7 +187,7 @@ for epoch in range(start_epoch, end_epoch+1):
                 exp.add_scalar_dict(losses, step=cnt)
 
         if cnt % save_interval == 0 and cnt > 0:
-            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians{}_b{}.h5'.format(cnt , batch_size))
+            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians_{}_b{}.h5'.format(cnt , batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 
