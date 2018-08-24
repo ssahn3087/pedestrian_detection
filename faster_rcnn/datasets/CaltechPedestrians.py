@@ -4,6 +4,7 @@ import glob
 import pickle
 import scipy.sparse
 import numpy as np
+from PIL import Image
 import numpy.random as npr
 from faster_rcnn.datasets.imdb import imdb
 from faster_rcnn.fast_rcnn.config import cfg
@@ -15,7 +16,7 @@ class CaltechPedestrians(imdb):
         imdb.__init__(self, name)
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 5
+        self.scene_per_episode_max = 10
         self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -24,7 +25,8 @@ class CaltechPedestrians(imdb):
         self._classes = ('__background__',  # always index 0 but no background data
                          'person')
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
-        self._image_index = self._load_image_set_index()
+        self._image_index_default = self._load_image_set_index()
+        self._image_index = None
         self._roidb_handler = self.gt_roidb
 
     """
@@ -63,6 +65,9 @@ class CaltechPedestrians(imdb):
 
         This function loads/saves from/to a cache file to speed up future calls.
         """
+        if (self.area_thresh is not None) or (self.area_thresh != 0):
+            print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
+
         cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
         try:
             if os.path.getsize(cache_file) > 0:
@@ -70,40 +75,41 @@ class CaltechPedestrians(imdb):
                     roidb = pickle.load(fid)
                 self.update_image_index(roidb)
                 print ('{} gt roidb loaded from {}'.format(self.name, cache_file))
-                return roidb
         except FileNotFoundError as e:
             print(str(e))
-            gt_roidb = [self._load_pedestrian_annotation(index)
-                        for index in self.image_index]
-            gt_roidb = self.remove_none(gt_roidb)
+            roidb = [self._load_pedestrian_annotation(index)
+                        for index in self._image_index_default]
+            roidb = self.remove_none(roidb)
             with open(cache_file, 'wb') as fid:
-                pickle.dump(gt_roidb, fid, pickle.HIGHEST_PROTOCOL)
+                pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
-            return gt_roidb
+
+        else:
+            roidb = self.gather_by_episode(roidb)
+            print('{} images of CaltechPedestrians dataset loaded'.format(len(roidb)))
+            return roidb
 
     def update_image_index(self, roidb):
-        image_set_file = self.image_path + "/ref.txt"
+        image_set_file = self.cache_path + "/ref.txt"
         f = open(image_set_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
         f.close()
         self._image_index = image_index
-        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
-              .format(len(roidb), self.scene_per_episode_max))
+
         assert len(self._image_index) == len(roidb), 'Create cache file again, ref.txt has been damaged'
 
     def remove_none(self, gt_roidb):
         roidb = [db for db in gt_roidb if db is not None]
         image_index =[]
-        image_set_file = self.image_path + "/ref.txt"
+        image_set_file = self.cache_path + "/ref.txt"
         with open(image_set_file, 'w') as f:
             for i, db in enumerate(gt_roidb):
                 if db is not None:
-                    image_index.append(self._image_index[i])
-                    f.write(self._image_index[i]+'\n')
+                    image_index.append(self._image_index_default[i])
+                    f.write(self._image_index_default[i]+'\n')
         self._image_index = image_index
-        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
-              .format(len(roidb), self.scene_per_episode_max))
+
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
 
@@ -111,7 +117,7 @@ class CaltechPedestrians(imdb):
 
     def _load_pedestrian_annotation(self, index):
 
-        [i, fid, set_name, video_name] = index.split("/")[-4:]
+        [set_name, video_name, fid, i] = index.split("/")[-4:]
 
         # Load data from a data frame
         objs = self.annotations[set_name][video_name]['frames'][fid]
@@ -131,13 +137,24 @@ class CaltechPedestrians(imdb):
         for ix, obj in enumerate(objs):
             pos = np.round(np.array(obj['pos'], dtype=np.float32))
             label = obj['lbl']
+
+            # let negative position be at 0
+            indices = np.where(pos[:2] < 1)[0]
+            pos[indices] = 1
+
             # Make pixel indexes 0-based
             l = pos[0] - 1
             t = pos[1] - 1
             w = pos[2]
             h = pos[3]
+
+            img = self.image_path_from_index(index)
+            (width, height) = Image.open(img).size
             # boxes, gt_classes, seg_areas, ishards, overlaps
-            boxes[ix, :] = [l, t, l + w, t + h]
+            boxes[ix, :2] = [l, t]
+            boxes[ix, 2] = width - 1 if l + w >= width else l + w
+            boxes[ix, 3] = height - 1 if t + h >= height else t + h
+
             cls = self._class_to_ind[label]
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
@@ -170,7 +187,7 @@ class CaltechPedestrians(imdb):
         """
         Construct an image path from the image's "index" identifier.
         """
-        [i, fid, set_name, video_name] = index.split("/")[-4:]
+        [set_name, video_name, fid, i] = index.split("/")[-4:]
         image_path = "{}/{}/{}/{}{}".format(self.image_path, set_name, video_name, fid, self._image_ext)
         assert os.path.exists(image_path), \
             'Path does not exist: {}'.format(image_path)
@@ -181,31 +198,22 @@ class CaltechPedestrians(imdb):
         Load the indexes listed in this dataset's image set file.
         """
 
-        if (self.area_thresh is not None) or (self.area_thresh != 0):
-            print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
-
         image_set_file = self.image_path + "/ref.txt"
         f = open(image_set_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
         f.close()
-        self._image_index = image_index
-
         return image_index
 
     def object_condition_satisfied(self, obj, index):
-        from PIL import Image
-        image_path = self.image_path_from_index(index)
-        (width, height) = Image.open(image_path).size
-        pos = np.round(np.array(obj['pos'], dtype=np.float32))
+        pos = np.array(obj['pos'], dtype=np.float32)
         label = obj['lbl']
         occl = int(obj['occl'])
         area = float(pos[2] * pos[3])
         # take label == 'person' / areas > 200.0
         if label != 'person' or area < self.area_thresh or occl == 1:
             return False
-        elif pos[0] + pos[2] > width or pos[1] + pos[3] > height \
-                or (pos < 0).any() or pos.size < 4:
+        elif (pos[3:] <= 10).any() or pos.size < 4:
             return False
         else:
             return True
@@ -218,9 +226,30 @@ class CaltechPedestrians(imdb):
                 video_name = video_path.split("/")[-1]
                 unit = self.annotations[set_name][video_name]["frames"]
                 for fid, v in unit.items():
-                    if fid == '0': continue
                     _str = unit[fid][0]['str']
                     _end = unit[fid][0]['end']
                     episodes[(set_name, video_name, _str, _end)].append(fid)
         print("CaltechPedestrians dataset consists of {} episodes".format(len(episodes)))
         return episodes
+
+    def gather_by_episode(self, roidb):
+        episodes = self.get_epsiode()
+        image_index = ['/'.join(index.split('/')[:-1]) for index in self.image_index]
+        new_index = []
+        for keys, fids in episodes.items():
+            set_name, video_name = keys[:2]
+            indices = np.sort(npr.choice(len(fids), self.scene_per_episode_max, replace=False)) \
+                if len(fids) > self.scene_per_episode_max else np.arange(len(fids))
+            for fid in np.asarray(fids)[indices]:
+                index = '{}/{}/{}'.format(set_name, video_name, fid)
+                new_index.append(index)
+        new_index = np.asarray(new_index)
+        image_index = np.asarray(image_index)
+        match_indices = np.where(np.isin(image_index, new_index))[0]
+        roidb = np.array(roidb)[match_indices].tolist()
+        self._image_index = np.array(self.image_index)[match_indices].tolist()
+        assert len(self._image_index) == len(roidb), \
+            'fatal error: the length of _image_index must be same with roidb'
+        print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
+              .format(len(roidb), self.scene_per_episode_max))
+        return roidb

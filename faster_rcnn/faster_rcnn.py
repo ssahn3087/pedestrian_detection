@@ -266,7 +266,8 @@ class FasterRCNN(nn.Module):
             self.bg_cnt = bg_cnt
 
         ce_weights = torch.ones(cls_score.size(1))
-        ce_weights[0] = float(fg_cnt) / bg_cnt
+        if bg_cnt > 0:
+            ce_weights[0] = float(fg_cnt) / bg_cnt
         ce_weights = ce_weights.cuda()
         cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights).mean()
 
