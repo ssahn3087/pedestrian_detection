@@ -83,8 +83,7 @@ class CaltechPedestrians(imdb):
             with open(cache_file, 'wb') as fid:
                 pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
-
-        else:
+        finally:
             roidb = self.gather_by_episode(roidb)
             print('{} images of CaltechPedestrians dataset loaded'.format(len(roidb)))
             return roidb
