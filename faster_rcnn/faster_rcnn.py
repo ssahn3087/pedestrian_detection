@@ -24,9 +24,8 @@ cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 cfg_from_file(cfg_file)
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
-    dets = np.hstack((pred_boxes,
-                      scores[:, np.newaxis])).astype(np.float32)
-    keep = nms(dets, nms_thresh)
+    dets = torch.cat((pred_boxes, scores.unsqueeze(1)), 1)
+    keep = nms(dets, nms_thresh).long().view(-1)
     if inds is None:
         return pred_boxes[keep], scores[keep]
     return pred_boxes[keep], scores[keep], inds[keep]
@@ -165,7 +164,7 @@ class FasterRCNN(nn.Module):
         super(FasterRCNN, self).__init__()
 
         if classes is not None:
-            self.classes = classes
+            self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
         self.rpn = RPN()
@@ -275,38 +274,60 @@ class FasterRCNN(nn.Module):
 
         return cross_entropy, loss_box
 
-    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, im_shape, nms=True, clip=True, min_score=0.0):
+    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0):
+        scores = cls_prob.data
+        boxes = rois.data[:, :, 1:5]
+
+        if cfg.TEST.BBOX_REG:
+            # Apply bounding-box regression deltas
+            box_deltas = bbox_pred.data
+            if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
+                # Optionally normalize targets by a precomputed mean and stdev
+                box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
+                                 + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+
+                box_deltas = box_deltas.view(1, -1, 4 * self.n_classes)
+            pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+            pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        else:
+            # Simply repeat the boxes, once for each class
+            pred_boxes = np.tile(boxes, (1, scores.shape[1]))
+        pred_boxes /= im_info.data[0][2]
+
+        scores = scores.squeeze()
+        pred_boxes = pred_boxes.squeeze()
+
         # find class
-        scores, inds = cls_prob.data.max(1)
-        scores, inds = scores.cpu().numpy(), inds.cpu().numpy()
-
-        keep = np.where((inds > 0) & (scores >= min_score))
+        scores, inds = scores.max(1)
+        keep = ((inds > 0) & (scores >= min_score)).nonzero().squeeze()
         scores, inds = scores[keep], inds[keep]
-
-        # Apply bounding-box regression deltas
-        keep = keep[0]
-        box_deltas = bbox_pred.data.cpu().numpy()[keep]
-        box_deltas = np.asarray([
-            box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)] for i in range(len(inds))
-        ], dtype=np.float)
-        boxes = rois.data.cpu().numpy()[keep, 1:5] / im_info[0][2]
-        pred_boxes = bbox_transform_inv(boxes, box_deltas)
-        if clip:
-            pred_boxes = clip_boxes(pred_boxes, im_shape)
-
+        pred_boxes = pred_boxes[keep]
         # nms
-        if nms and pred_boxes.shape[0] > 0:
+        if nms and pred_boxes.size(0) > 0:
             pred_boxes, scores, inds = nms_detections(pred_boxes, scores, 0.3, inds=inds)
+
+        pred_boxes = pred_boxes.cpu().numpy()
+        scores = scores.cpu().numpy()
+        inds = inds.cpu().numpy()
 
         return pred_boxes, scores, self.classes[inds]
 
-    def detect(self, image, thr=0.3):
+    def detect(self, image, blob, thr=0.3):
         im_data, im_scales = self.get_image_blob(image)
         im_info = np.array(
             [[im_data.shape[1], im_data.shape[2], im_scales[0]]],
             dtype=np.float32)
 
-        cls_prob, bbox_pred, rois = self(im_data, im_info)
+        im_data_pt = torch.from_numpy(im_data)
+        im_data_pt = im_data_pt.permute(0, 3, 1, 2)
+        im_info_pt = torch.from_numpy(im_info)
+        (im_data, im_info, gt_boxes, num_boxes) = blob
+        im_data.data.resize_(im_data_pt.size()).copy_(im_data_pt)
+        im_info.data.resize_(im_info_pt.size()).copy_(im_info_pt)
+        gt_boxes.data.resize_(1, 1, 5).zero_()
+        num_boxes.data.resize_(1).zero_()
+
+        cls_prob, bbox_pred, rois = self(im_data, im_info, gt_boxes, num_boxes)
         pred_boxes, scores, classes = \
             self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape, min_score=thr)
         return pred_boxes, scores, classes
