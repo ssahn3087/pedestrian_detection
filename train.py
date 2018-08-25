@@ -164,8 +164,7 @@ for epoch in range(start_epoch, end_epoch+1):
         # backward
         optimizer.zero_grad() # clear grad
         loss.backward()
-        if not is_resnet:
-            network.clip_gradient(net, 10.)
+        network.clip_gradient(net, 10.)
         optimizer.step()
 
         if step % disp_interval == 0:
