@@ -42,12 +42,12 @@ imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 #pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
-pretrained_model = None
+pretrained_model =  "data/pretrained_model/voc_2007_trainval_50000_resnet50_0.7_b1.h5"
 output_dir = 'models/saved_model3'
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 5
+lr_decay_step = 30000
 lr_decay = 1./10
 rand_seed = 1024
 
@@ -84,6 +84,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 
 
 # load net
+print(imdb.classes)
 if is_resnet:
     model_name = 'resnet50'
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
@@ -132,7 +133,7 @@ for epoch in range(start_epoch, end_epoch+1):
 
     tp, tf, fg, bg = 0., 0., 0, 0
     net.train()
-    if epoch % lr_decay_step == 0:
+    if cnt % lr_decay_step == 0:
         lr *= lr_decay
         params = train_net_params(net, cfg, lr)
         optimizer = torch.optim.SGD(params, momentum=momentum)
@@ -164,8 +165,7 @@ for epoch in range(start_epoch, end_epoch+1):
         # backward
         optimizer.zero_grad() # clear grad
         loss.backward()
-        if not is_resnet:
-            network.clip_gradient(net, 10.)
+        network.clip_gradient(net, 10.)
         optimizer.step()
 
         if step % disp_interval == 0:
@@ -200,8 +200,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 exp.add_scalar_dict(losses, step=cnt)
 
         if cnt % save_interval == 0 and cnt > 0:
-            save_name = os.path.join(output_dir, 'faster_rcnn_pedestrians_{}_{}_{}_b{}.h5'
-                                     .format(cnt, model_name, fg_thresh, batch_size))
+            save_name = os.path.join(output_dir, '{}_{}_{}_{}_b{}_f.h5'
+                                     .format(imdb_name, cnt, model_name, fg_thresh, batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 
