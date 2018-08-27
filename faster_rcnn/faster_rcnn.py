@@ -274,45 +274,41 @@ class FasterRCNN(nn.Module):
 
         return cross_entropy, loss_box
 
-    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0):
-        scores = cls_prob.data
-        boxes = rois.data[:, :, 1:5]
-
-        if cfg.TEST.BBOX_REG:
-            # Apply bounding-box regression deltas
-            box_deltas = bbox_pred.data
-            if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
-                # Optionally normalize targets by a precomputed mean and stdev
-                box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                                 + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
-
-                box_deltas = box_deltas.view(1, -1, 4 * self.n_classes)
-            pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
-            pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
-        else:
-            # Simply repeat the boxes, once for each class
-            pred_boxes = np.tile(boxes, (1, scores.shape[1]))
-        pred_boxes /= im_info.data[0][2]
-
-        scores = scores.squeeze()
-        pred_boxes = pred_boxes.squeeze()
-
+    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0 ,nms_thresh=0.3):
+        scores = cls_prob.data.squeeze()
         # find class
         scores, inds = scores.max(1)
         keep = ((inds > 0) & (scores >= min_score)).nonzero().squeeze()
         scores, inds = scores[keep], inds[keep]
-        pred_boxes = pred_boxes[keep]
+
+        # Apply bounding-box regression deltas
+        box_deltas = bbox_pred.data.squeeze()[keep]
+        boxes = rois.data.squeeze()[:, 1:5][keep]
+
+        if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
+            # Optionally normalize targets by a precomputed mean and stdev
+            box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
+                             + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+
+        box_deltas = box_deltas.view(-1, 4 * self.n_classes)
+        box_deltas = torch.cat([box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)]\
+                                for i in range(len(inds))], 0)
+        box_deltas = box_deltas.view(-1, 4)
+        boxes, box_deltas = boxes.unsqueeze(0), box_deltas.unsqueeze(0)
+        pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+        pred_boxes = clip_boxes(pred_boxes, im_info.data, 1)
+        pred_boxes = pred_boxes.squeeze()
+        pred_boxes /= im_info.data[0][2]
         # nms
         if nms and pred_boxes.size(0) > 0:
-            pred_boxes, scores, inds = nms_detections(pred_boxes, scores, 0.3, inds=inds)
-
+            pred_boxes, scores, inds = nms_detections(pred_boxes, scores, nms_thresh, inds=inds)
         pred_boxes = pred_boxes.cpu().numpy()
         scores = scores.cpu().numpy()
         inds = inds.cpu().numpy()
 
         return pred_boxes, scores, self.classes[inds]
 
-    def detect(self, image, blob, thr=0.3):
+    def detect(self, image, blob, thr=0.3, nms_thresh=0.3):
         im_data, im_scales = self.get_image_blob(image)
         im_info = np.array(
             [[im_data.shape[1], im_data.shape[2], im_scales[0]]],
@@ -329,7 +325,8 @@ class FasterRCNN(nn.Module):
 
         cls_prob, bbox_pred, rois = self(im_data, im_info, gt_boxes, num_boxes)
         pred_boxes, scores, classes = \
-            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape, min_score=thr)
+            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape,\
+                                       min_score=thr, nms_thresh= nms_thresh)
         return pred_boxes, scores, classes
 
     def get_image_blob_noscale(self, im):
