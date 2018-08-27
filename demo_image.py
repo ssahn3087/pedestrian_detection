@@ -11,9 +11,8 @@ from faster_rcnn.datasets.factory import get_imdb
 
 def test():
     import os
-    img_file = 'demo/004545.jpg'
+    img_file = 'demo/1002.jpg'
     image = cv2.imread(img_file)
-    video_file = 'demo/'
 
     imdb_name = 'CaltechPedestrians'
     imdb = get_imdb(imdb_name)
@@ -37,7 +36,7 @@ def test():
 
     t = Timer()
     t.tic()
-    dets, scores, classes = detector.detect(image, blob, 0.7)
+    dets, scores, classes = detector.detect(image, blob, thr=0.7, nms_thresh=0.3)
     runtime = t.toc()
     print('total spend: {}s'.format(runtime))
 
