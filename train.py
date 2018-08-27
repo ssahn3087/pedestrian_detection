@@ -42,7 +42,7 @@ imdb_name = 'CaltechPedestrians'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'faster_rcnn_pedestrians_90000_vgg16_0.7_b1.h5'
+pre_model_name = 'voc_2007_trainval_40000_resnet50_0.7_b1_f.h5'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -93,7 +93,7 @@ else:
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
 if pretrained_model:
-    network.load_net(pretrained_model, net)
+    network.load_net_pedestrians(pretrained_model, net)
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
@@ -198,8 +198,8 @@ for epoch in range(start_epoch, end_epoch+1):
         if cnt % save_interval == 0 and cnt > 0:
             save_dir = os.path.join(output_dir, model_name)
             make_dir(save_dir)
-            save_name = os.path.join(save_dir, 'faster_rcnn_pedestrians_{}_{}_b{}.h5'
-                                     .format(cnt, fg_thresh, batch_size))
+            save_name = os.path.join(save_dir, '{}_pedestrians_{}_{}_b{}.h5'
+                                     .format(model_name, cnt, fg_thresh, batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 

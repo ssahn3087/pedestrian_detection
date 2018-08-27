@@ -76,8 +76,9 @@ for split in ['71', '370']:
     __sets[name] = (lambda split=split: nthu(split))
 
 # Set up CaltechPedestrians Benchmark dataset
-name ='CaltechPedestrians'
-__sets[name] = (lambda _name=name: CaltechPedestrians(_name))
+for split in ['train', 'test']:
+    name = 'CaltechPedestrians_{}'.format(split)
+    __sets[name] = (lambda split=split: CaltechPedestrians(split))
 
 
 def get_imdb(name):
