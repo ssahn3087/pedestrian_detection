@@ -213,7 +213,7 @@ __C.TEST.BBOX_REG = True
 __C.TEST.HAS_RPN = True
 
 # Test using these proposals
-__C.TEST.PROPOSAL_METHOD = 'selective_search'
+__C.TEST.PROPOSAL_METHOD = 'gt'
 
 ## NMS threshold used on RPN proposals
 __C.TEST.RPN_NMS_THRESH = 0.7

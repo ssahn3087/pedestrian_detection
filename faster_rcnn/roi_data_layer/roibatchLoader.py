@@ -208,8 +208,6 @@ class roibatchLoader(data.Dataset):
             else:
                 num_boxes = 0
 
-
-
             # permute trim_data to adapt to downstream processing
             padding_data = padding_data.permute(2, 0, 1).contiguous()
             im_info = im_info.view(3)

@@ -81,7 +81,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 boxes = gt_boxes.numpy()[i]
                 width, height = im_info[i][1], im_info[i][0]
                 if(boxes[:,0] >= width).any() or (boxes[:,2] >= width).any() or \
-                    (boxes[:, 1] >= height).any() or (boxes[:, 3] >= height).any():
+                    (boxes[:, 1] >= height).any() or (boxes[:, 3] >= height).any() or \
+                            (boxes < 0).any():
                     print(step)
                     print(width, height)
                     im_scale = im_info.numpy()[i][2]

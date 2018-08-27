@@ -140,12 +140,11 @@ def init_data(is_cuda=True):
 
 
 def data_to_variable(blob, data):
-
-    im_data = Variable(blob[0].data.resize_(data[0].size()).copy_(data[0]))
-    im_info = Variable(blob[1].data.resize_(data[1].size()).copy_(data[1]))
-    gt_boxes = Variable(blob[2].data.resize_(data[2].size()).copy_(data[2]))
-    num_boxes = Variable(blob[3].data.resize_(data[3].size()).copy_(data[3]))
-    return (im_data,im_info,gt_boxes,num_boxes)
+    blob[0].data.resize_(data[0].size()).copy_(data[0])
+    blob[1].data.resize_(data[1].size()).copy_(data[1])
+    blob[2].data.resize_(data[2].size()).copy_(data[2])
+    blob[3].data.resize_(data[3].size()).copy_(data[3])
+    return blob
 
 
 def np_to_variable(x, is_cuda=True, dtype=torch.FloatTensor):

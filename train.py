@@ -40,14 +40,15 @@ def log_print(text, color=None, on_color=None, attrs=None):
 imdb_name = 'CaltechPedestrians'
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-#pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
-#pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'
-pretrained_model =  "data/pretrained_model/voc_2007_trainval_50000_resnet50_0.7_b1.h5"
+model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
+pre_model_name = 'faster_rcnn_pedestrians_90000_vgg16_0.7_b1.h5'
+pretrained_model = model_dir + pre_model_name
+
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 30000
+lr_decay_step = 5
 lr_decay = 1./10
 rand_seed = 1024
 
@@ -84,7 +85,6 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 
 
 # load net
-print(imdb.classes)
 if is_resnet:
     model_name = 'resnet50'
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
@@ -93,18 +93,19 @@ else:
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
 if pretrained_model:
-    network.load_net_pedestrians(pretrained_model, net)
+    network.load_net(pretrained_model, net)
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
 net.cuda()
-
 params = train_net_params(net, cfg, lr)
 optimizer = torch.optim.SGD(params, momentum=momentum)
 
 
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+def make_dir(output_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+make_dir(output_dir)
 
 # tensorboad
 use_tensorboard = use_tensorboard and CrayonClient is not None
@@ -117,8 +118,6 @@ if use_tensorboard:
         exp = cc.create_experiment(exp_name)
     else:
         exp = cc.open_experiment(exp_name)
-
-
 
 iters_per_epoch = int(train_size / batch_size)
 # training
@@ -133,25 +132,22 @@ for epoch in range(start_epoch, end_epoch+1):
 
     tp, tf, fg, bg = 0., 0., 0, 0
     net.train()
-    if cnt % lr_decay_step == 0:
+    if epoch % lr_decay_step == 0:
         lr *= lr_decay
         params = train_net_params(net, cfg, lr)
         optimizer = torch.optim.SGD(params, momentum=momentum)
+
     data_iter = iter(dataloader)
     for step in range(iters_per_epoch):
 
         # get one batch
         data = next(data_iter)
         (im_data, im_info, gt_boxes, num_boxes) = data_to_variable(blob, data)
-
         # forward
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
         loss = net.loss + net.rpn.loss
-        if np.isnan(float(loss.data[0])) or float(loss.data[0]) > 100.0 :
-            print(im_info.data)
-            print(gt_boxes.data)
-            print(data[4])
+
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)
@@ -200,8 +196,10 @@ for epoch in range(start_epoch, end_epoch+1):
                 exp.add_scalar_dict(losses, step=cnt)
 
         if cnt % save_interval == 0 and cnt > 0:
-            save_name = os.path.join(output_dir, '{}_{}_{}_{}_b{}_f.h5'
-                                     .format(imdb_name, cnt, model_name, fg_thresh, batch_size))
+            save_dir = os.path.join(output_dir, model_name)
+            make_dir(save_dir)
+            save_name = os.path.join(save_dir, 'faster_rcnn_pedestrians_{}_{}_b{}.h5'
+                                     .format(cnt, fg_thresh, batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
 
