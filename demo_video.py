@@ -13,16 +13,16 @@ from Encoder import start_AVrecording, stop_AVrecording
 global video_file
 global output_file
 global fps
-video_file = 'demo/Gang burgle 50 firearms from gun shop in 2 minutes, Houston.mp4'
+video_file = 'demo/Youtube_Pedestrians_720p.mp4'
 output_file = 'demo/output.avi'
-fps = 25
+fps = 30
 def test():
     import os
     imdb_name = 'CaltechPedestrians'
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'faster_rcnn_pedestrians_90000_vgg16_0.7_b1.h5'
+    pre_model_name = 'CaltechPedestrians_20000_resnet50_0.7_b1_f.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
 
@@ -30,6 +30,8 @@ def test():
         detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
     elif 'resnet50' in pre_model_name.split('_'):
         detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
+    else:
+        detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
     network.load_net(pretrained_model, detector)
     detector.cuda()
     detector.eval()

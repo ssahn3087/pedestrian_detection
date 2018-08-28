@@ -18,7 +18,7 @@ from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 # hyper-parameters
 # ------------
 #imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians'
+imdb_name = 'CaltechPedestrians_train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 #pretrained_model = 'data/pretrained_model/VGG_imagenet.npy'
 pretrained_model = 'data/pretrained_model/VGGnet_fast_rcnn_iter_70000.h5'

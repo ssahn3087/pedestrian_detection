@@ -13,20 +13,22 @@ from collections import defaultdict
 
 class CaltechPedestrians(imdb):
 
-    def __init__(self, name):
-        imdb.__init__(self, name)
+    def __init__(self, image_set):
+        imdb.__init__(self,  'CaltechPedestrians_' + image_set)
+        self._prefix = 'CaltechPedestrians'
         # object image condition ex) bbox of object is too small to recognize
+        self.image_set = image_set
         self.area_thresh = 200.0
         self.scene_per_episode_max = 20
-        self.image_path = os.path.join(cfg.DATA_DIR, self._name, "images")
-        self.annotations_path = os.path.join(cfg.DATA_DIR, self._name, "annotations")
+        self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
+        self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
         self.annotations = self._load_json_file()
+        self._image_index_default = self._load_image_set_index()
         self._image_ext = '.jpg'
         self._classes = ('__background__',  # always index 0 but no background data
                          'person')
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
-        self._image_index_default = self._load_image_set_index()
         self._roidb_handler = self.gt_roidb
         self._image_index = []
 
@@ -69,13 +71,16 @@ class CaltechPedestrians(imdb):
         if (self.area_thresh is not None) or (self.area_thresh != 0):
             print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
-        cache_file = os.path.join(self.cache_path, self.name + '_gt_roidb.pkl')
+        if self.image_set == 'train':
+            cache_file = os.path.join(self.cache_path, self._prefix + '_train_gt_roidb.pkl')
+        else:
+            cache_file = os.path.join(self.cache_path, self._prefix + '_test_gt_roidb.pkl')
         try:
             if os.path.getsize(cache_file) > 0:
                 with open(cache_file, 'rb') as fid:
                     roidb = pickle.load(fid)
                 self.update_image_index(roidb)
-                print ('{} gt roidb loaded from {}'.format(self.name, cache_file))
+                print('{} gt roidb loaded from {}'.format(self.name, cache_file))
         except FileNotFoundError as e:
             print(str(e))
             roidb = [self._load_pedestrian_annotation(index)
@@ -90,7 +95,7 @@ class CaltechPedestrians(imdb):
             return roidb
 
     def update_image_index(self, roidb):
-        image_set_file = self.cache_path + "/ref.txt"
+        image_set_file = os.path.join(self.cache_path, self.image_set + ".txt")
         f = open(image_set_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
@@ -102,7 +107,7 @@ class CaltechPedestrians(imdb):
     def remove_none(self, gt_roidb):
         roidb = [db for db in gt_roidb if db is not None]
         image_index =[]
-        image_set_file = self.cache_path + "/ref.txt"
+        image_set_file = os.path.join(self.cache_path, self.image_set + ".txt")
         with open(image_set_file, 'w') as f:
             for i, db in enumerate(gt_roidb):
                 if db is not None:
@@ -188,17 +193,19 @@ class CaltechPedestrians(imdb):
         Construct an image path from the image's "index" identifier.
         """
         [set_name, video_name, fid, i] = index.split("/")[-4:]
-        image_path = "{}/{}/{}/{}{}".format(self.image_path, set_name, video_name, fid, self._image_ext)
+        prefix = os.path.join(self.image_path, self.image_set)
+        image_path = "{}/{}/{}/{}{}".format(prefix, set_name, video_name, fid, self._image_ext)
         assert os.path.exists(image_path), \
             'Path does not exist: {}'.format(image_path)
         return image_path
+
+
 
     def _load_image_set_index(self):
         """
         Load the indexes listed in this dataset's image set file.
         """
-
-        image_set_file = self.image_path + "/ref.txt"
+        image_set_file = os.path.join(self.image_path, self.image_set, self.image_set + ".txt")
         f = open(image_set_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
@@ -220,7 +227,8 @@ class CaltechPedestrians(imdb):
 
     def get_epsiode(self):
         episodes = defaultdict(list)
-        for set_path in sorted(glob.glob(self.image_path + '/set*')):
+        prefix = os.path.join(self.image_path, self.image_set)
+        for set_path in sorted(glob.glob(prefix + '/set*')):
             set_name = set_path.split("/")[-1]
             for video_path in sorted(glob.glob(set_path + '/V*')):
                 video_name = video_path.split("/")[-1]
@@ -247,7 +255,7 @@ class CaltechPedestrians(imdb):
         image_index = np.asarray(image_index)
         match_indices = np.where(np.isin(image_index, new_index))[0]
         roidb = np.array(roidb)[match_indices].tolist()
-        self._image_index = np.array(self.image_index)[match_indices].tolist()
+        self._image_index = np.array(self._image_index)[match_indices].tolist()
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
         print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \

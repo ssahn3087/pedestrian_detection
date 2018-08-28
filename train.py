@@ -36,13 +36,13 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-#imdb_name = 'CaltechPedestrians'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians'
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'voc_2007_trainval_50000_resnet50_0.7_b1.h5'
+pre_model_name = 'voc_2007_trainval_40000_resnet50_0.7_b1_f.h5'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -93,7 +93,7 @@ else:
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
 if pretrained_model:
-    network.load_net(pretrained_model, net)
+    network.load_net_pedestrians(pretrained_model, net)
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train

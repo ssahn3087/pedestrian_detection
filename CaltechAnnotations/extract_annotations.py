@@ -26,7 +26,9 @@ if len(sys.argv) != 3:
     print ("Usage:")
     print ("python extract_annotations.py path/annotations output_file.json")
     exit()
-make_dir(sys.argv[1])
+
+annotation_path = os.path.join(os.getcwd(), 'extracted/annotations')
+make_dir(annotation_path)
 all_obj = 0
 data = defaultdict(dict)
 
@@ -84,4 +86,4 @@ for dname in sorted(glob.glob(os.path.join(sys.argv[1], 'set*'))):
         all_obj += n_obj
 
 print('Number of objects:', all_obj)
-json.dump(data, open(sys.argv[2], 'w'))
+json.dump(data, open(os.path.join(annotation_path,sys.argv[2]), 'w'))
