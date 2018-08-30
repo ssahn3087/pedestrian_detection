@@ -42,7 +42,7 @@ def test(model, imdb, roidb):
     tp, fg = 0, 0
     print('Test Phase with ', model)
     test_num = len(roidb)
-    display_interval = np.floor(test_num / 4)
+    display_interval = 1000
     for i in range(test_num):
         gt_boxes = roidb[i]['boxes']
         gt_classes = roidb[i]['gt_classes']
@@ -63,12 +63,15 @@ def test(model, imdb, roidb):
         except:
             pass
         if (i % display_interval == 0) and i > 0:
-            print('\t---{}  Precision: {:.2f}%, '.format(i, (tp / fg * 100)), pretrained_model)
-    print('\tPrecision: %.2f%%, ' % (tp/fg*100), pretrained_model)
+            print('\t---{}  Precision: {:.2f}%, '.format(i, (tp / fg * 100)), model)
+    print('\tPrecision: %.2f%%, ' % (tp/fg*100), model)
     return (tp/fg*100)
 if __name__ == '__main__':
     f = open(os.path.join(model_dir,'precision.txt'), 'w')
+
     for model in pretrained_model:
+        if model.endswith('txt'):
+            continue
         precision = test(model, imdb, roidb)
-        f.write(model,'  ----{:.2f}%'.format(precision))
+        f.write(model+'  ----{:.2f}%\n'.format(precision))
     f.close()
