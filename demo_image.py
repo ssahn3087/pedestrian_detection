@@ -11,21 +11,24 @@ from faster_rcnn.datasets.factory import get_imdb
 
 def test():
     import os
-    img_file = 'demo/1002.jpg'
+    img_file = 'demo/004545.jpg'
     image = cv2.imread(img_file)
 
-    imdb_name = 'CaltechPedestrians'
+    #imdb_name = 'CaltechPedestrians_train'
+    imdb_name = 'voc_2007_trainval'
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'faster_rcnn_pedestrians_90000_vgg16_0.7_b1.h5'
+    pre_model_name = 'resnet50_pedestrians_230000_0.7_b1.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
-
+    print(imdb.classes)
     if 'vgg16' in pre_model_name.split('_'):
         detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
     elif 'resnet50' in pre_model_name.split('_'):
         detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
+    else:
+        detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
     network.load_net(pretrained_model, detector)
     detector.cuda()
     detector.eval()

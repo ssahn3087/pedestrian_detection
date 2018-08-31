@@ -22,6 +22,7 @@ model_dir = 'data/test_phase/'
 models = os.listdir(model_dir)
 pretrained_model = [os.path.join(model_dir, model) for model in models]
 pretrained_model.sort()
+pretrained_model = pretrained_model[::-1]
 cfg_from_file(cfg_file)
 is_resnet = False
 imdb = get_imdb(imdb_name)
@@ -33,7 +34,10 @@ def test(model, imdb, roidb):
         detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
     else:
         detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
-    network.load_net(model, detector)
+    try:
+        network.load_net(model, detector)
+    except:
+        network.load_net_pedestrians(model, detector)
     detector.cuda()
     detector.eval()
 

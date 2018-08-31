@@ -37,18 +37,18 @@ def log_print(text, color=None, on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 #imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians'
+imdb_name = 'CaltechPedestrians_train'
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'voc_2007_trainval_40000_resnet50_0.7_b1_f.h5'
+pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 5
+lr_decay_step = 3
 lr_decay = 1./10
 rand_seed = 1024
 
