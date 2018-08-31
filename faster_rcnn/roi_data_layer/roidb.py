@@ -92,13 +92,13 @@ def extract_roidb(imdb_names, training=True):
     Combine multiple roidbs
     """
 
-    def get_training_roidb(imdb):
+    def get_training_roidb(imdb, imdb_name):
         """Returns a roidb (Region of Interest database) for use in training."""
-        if cfg.TRAIN.USE_FLIPPED:
+        if cfg.TRAIN.USE_FLIPPED and imdb_name.endswith('train'):
             print('Appending horizontally-flipped training examples...')
             imdb.roidb
             imdb.append_flipped_images()
-            print('done')
+            print('{} images loaded after flipping images'.format(len(imdb.roidb)))
 
         prepare_roidb(imdb)
         # ratio_index = rank_roidb_ratio(imdb)
@@ -106,10 +106,10 @@ def extract_roidb(imdb_names, training=True):
 
     def get_roidb(imdb_name):
         imdb = get_imdb(imdb_name)
-        print('----------------------------------')
+        print('--------------------------------------------------------')
         print('Loaded dataset `{:s}` for training'.format(imdb.name))
         imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
-        roidb = get_training_roidb(imdb)
+        roidb = get_training_roidb(imdb, imdb_name)
         return roidb
 
     roidbs = [get_roidb(s) for s in imdb_names.split('+')]

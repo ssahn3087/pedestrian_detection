@@ -243,7 +243,7 @@ __C.RESNET.FIXED_BLOCKS = 1
 
 __C.RESNET.IS_TRUE = False
 
-
+__C.POOLING_MODE = 'align'
 
 
 

@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 from faster_rcnn.datasets.imdb import imdb
-import faster_rcnn.datasets.ds_utils as ds_utils
+from faster_rcnn.datasets import ds_utils
 from faster_rcnn.fast_rcnn.config import cfg
 import os.path as osp
 import sys
@@ -21,6 +21,7 @@ from faster_rcnn.pycocotools import mask as COCOmask
 
 class coco(imdb):
     def __init__(self, image_set, year):
+
         imdb.__init__(self, 'coco_' + year + '_' + image_set)
         # COCO specific config options
         self.config = {'use_salt': True,
@@ -45,12 +46,10 @@ class coco(imdb):
         # For example, minival2014 is a random 5000 image subset of val2014.
         # This mapping tells us where the view's images and proposals come from.
         self._view_map = {
-          'minival2014': 'val2014',  # 5k val2014 subset
-          'valminusminival2014': 'val2014',  # val2014 \setminus minival2014
-          'test-dev2015': 'test2015',
-          'valminuscapval2014': 'val2014',
-          'capval2014': 'val2014',
-          'captest2014': 'val2014'
+          'minival2017': 'val2017',  # 5k val2014 subset
+          'test-dev2017': 'test2017',
+          'capval2017': 'val2017',
+          'captest2017': 'val2017',
         }
         coco_name = image_set + year  # e.g., "val2014"
         self._data_name = (self._view_map[coco_name]

@@ -1,26 +1,52 @@
 import os
 import torch
 import cv2
+import json
 import numpy as np
-
+import time
 from faster_rcnn.datasets.factory import get_imdb
-from faster_rcnn.faster_rcnn2 import FasterRCNN
+from faster_rcnn.faster_rcnn_res import FasterRCNN
 from faster_rcnn import network
 from faster_rcnn.roi_data_layer.roidb import extract_roidb
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
+from collections import defaultdict
+import glob
+from faster_rcnn.pycocotools.coco import COCO
+from faster_rcnn.pycocotools.cocoeval import COCOeval
+
+coco_set = 'data/coco/annotations/instances_train2017.json'
+train_set = 'data/CaltechPedestrians/images/train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 cfg_from_file(cfg_file)
 pretrained_model = 'data/pretrained_model/resnet50_imagenet.pth'
-imdb_name = 'CaltechPedestrians'
-imdb = get_imdb(imdb_name)
-_DEBUG = True
-net = FasterRCNN(classes=imdb.classes, debug=_DEBUG)
-network.weights_normal_init(net, dev=0.01)
 
+# 20 classes
+post_class = ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'boat', 'train', 'airplane',
+              'truck', 'bird', 'cat',  'dog', 'horse', 'sheep', 'cow',
+              'fire hydrant', 'stop sign', 'traffic light', 'parking meter', 'bench']
 
+dataset = json.load(open(coco_set,'r'))
+_COCO = COCO(coco_set)
+anns = _COCO.anns
+imgToAnns = _COCO.imgToAnns
+catToImgs = _COCO.catToImgs
+imgs = _COCO.imgs
+cats = _COCO.cats
 
+for k,v in catToImgs.items():
+    print(k, len(v))
 
+for k, v in imgToAnns.items():
+    objs = v
+    for obj in objs:
+        if obj['category_id'] > 21:
+            print(obj['category_id'])
+for k, v in anns.items():
+    obj = v
+    if obj['category_id'] > 21:
+        print(obj['category_id'])
 
+print(len(imgToAnns), len(imgs))
 def save_net(fname, net):
     import h5py
     h5f = h5py.File(fname, mode='w')

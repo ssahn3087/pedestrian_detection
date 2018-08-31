@@ -6,8 +6,8 @@ import cv2
 from faster_rcnn import network
 from faster_rcnn.network import init_data, data_to_variable
 from faster_rcnn.network import train_net_params
-from faster_rcnn.faster_rcnn import FasterRCNN as FasterRCNN_VGG
-from faster_rcnn.faster_rcnn2 import FasterRCNN as FasterRCNN_RES
+from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
+from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.datasets.factory import get_imdb
 from faster_rcnn.roi_data_layer.roidb import prepare_roidb
 from faster_rcnn.utils.cython_bbox import bbox_overlaps
@@ -23,17 +23,13 @@ models = os.listdir(model_dir)
 pretrained_model = [os.path.join(model_dir, model) for model in models]
 pretrained_model.sort()
 cfg_from_file(cfg_file)
-is_resnet = False
+is_resnet = cfg.RESNET.IS_TRUE
 imdb = get_imdb(imdb_name)
 prepare_roidb(imdb)
 roidb = imdb.roidb
 
-def test(model, imdb, roidb):
-    if not is_resnet:
-        detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
-    else:
-        detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
-    network.load_net(model, detector)
+def test(detector, imdb, roidb):
+
     detector.cuda()
     detector.eval()
 
@@ -42,7 +38,7 @@ def test(model, imdb, roidb):
     tp, fg = 0, 0
     print('Test Phase with ', model)
     test_num = len(roidb)
-    display_interval = 1000
+    # display_interval = 1000
     for i in range(test_num):
         gt_boxes = roidb[i]['boxes']
         gt_classes = roidb[i]['gt_classes']
@@ -62,16 +58,22 @@ def test(model, imdb, roidb):
                     tp += 1
         except:
             pass
-        if (i % display_interval == 0) and i > 0:
-            print('\t---{}  Precision: {:.2f}%, '.format(i, (tp / fg * 100)), model)
+        # if (i % display_interval == 0) and i > 0:
+        #     print('\t---{}  Precision: {:.2f}%, '.format(i, (tp / fg * 100)), model)
     print('\tPrecision: %.2f%%, ' % (tp/fg*100), model)
-    return (tp/fg*100)
+    return tp/fg*100
+
 if __name__ == '__main__':
     f = open(os.path.join(model_dir,'precision.txt'), 'w')
 
     for model in pretrained_model:
         if model.endswith('txt'):
             continue
-        precision = test(model, imdb, roidb)
+        if not is_resnet:
+            detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
+        else:
+            detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
+        network.load_net(model, detector)
+        precision = test(detector, imdb, roidb)
         f.write(model+'  ----{:.2f}%\n'.format(precision))
     f.close()

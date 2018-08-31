@@ -19,7 +19,7 @@ class CaltechPedestrians(imdb):
         # object image condition ex) bbox of object is too small to recognize
         self.image_set = image_set
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 10
+        self.scene_per_episode_max = 5 if image_set == 'test' else 15
         self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
