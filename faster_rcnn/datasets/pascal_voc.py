@@ -36,7 +36,7 @@ except NameError:
 
 # <<<< obsolete
 
-
+# PASCAL VOC 2007 : Total 5011 images, 15662 objects
 class pascal_voc(imdb):
     def __init__(self, image_set, year, devkit_path=None):
         imdb.__init__(self, 'voc_' + year + '_' + image_set)

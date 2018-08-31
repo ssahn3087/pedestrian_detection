@@ -59,7 +59,7 @@ import faster_rcnn.pycocotools.mask
 import os
 
 class COCO:
-    def __init__(self, annotation_file=None):
+    def __init__(self, annotation_file=None, post_class=None):
         """
         Constructor of Microsoft COCO helper class for reading and visualizing annotations.
         :param annotation_file (str): location of annotation file
@@ -67,6 +67,8 @@ class COCO:
         :return:
         """
         # load dataset
+        if post_class is not None:
+            self.post_class = post_class
         self.dataset = {}
         self.anns = []
         self.imgToAnns = {}
@@ -82,8 +84,10 @@ class COCO:
             self.createIndex()
 
     def createIndex(self):
+
         # create index
         print('creating index...')
+        tic = time.time()
         anns = {}
         imgToAnns = {}
         catToImgs = {}
@@ -109,15 +113,33 @@ class COCO:
             if 'annotations' in self.dataset:
                 for ann in self.dataset['annotations']:
                     catToImgs[ann['category_id']] += [ann['image_id']]
-
         print('index created!')
-
         # create class members
         self.anns = anns
         self.imgToAnns = imgToAnns
         self.catToImgs = catToImgs
         self.imgs = imgs
         self.cats = cats
+
+    def adjust_dataset_by_class(self, anns, imgToAnns, catToImgs, imgs, cats, post_class):
+        need_ids = self.getCatIds(catNms=post_class)
+        from time import sleep
+        # trim cats
+        for k, v in list(cats.items()):
+            if v['id'] not in need_ids: del cats[k]
+        # trim catToImgs
+        for k, v in list(catToImgs.items()):
+            if k not in need_ids: del catToImgs[k]
+        # trim imgToAnns, anns, imgs
+        for image_id, objs_at_id in list(imgToAnns.items()):
+            # objs : [ obj1(dict), obj2(dict), ... , obj_n(dict) ]
+            tmp_objs = []
+            for i, obj in enumerate(objs_at_id):
+                if obj['category_id'] not in need_ids: del anns[obj['id']]
+                else:                                  tmp_objs.append(obj)
+            imgToAnns[image_id] = tmp_objs
+            if imgToAnns[image_id] == []: del imgs[image_id]
+        return anns, imgToAnns, catToImgs, imgs, cats
 
     def info(self):
         """

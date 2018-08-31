@@ -6,10 +6,10 @@ from datetime import datetime
 from faster_rcnn import network
 from faster_rcnn.network import init_data, data_to_variable
 from faster_rcnn.network import train_net_params
-from faster_rcnn.faster_rcnn import FasterRCNN as FasterRCNN_VGG
-from faster_rcnn.faster_rcnn2 import FasterRCNN as FasterRCNN_RES
+from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
+from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
-
+from test_model import test
 from faster_rcnn.roi_data_layer.sampler import sampler
 from faster_rcnn.roi_data_layer.roidb import extract_roidb
 from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
@@ -36,19 +36,25 @@ def log_print(text, color=None, on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-#imdb_name = 'voc_2007_trainval'
+
+# imdb_name = 'voc_2007_trainval'
 imdb_name = 'CaltechPedestrians_train'
+test_name = 'CaltechPedestrians_test'
+# imdb_name = 'coco_2017_train'
+# test_name = 'coco_2017_val'
+
+
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
+pre_model_name = 'CaltechPedestrians_90000_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 3
+lr_decay_step = 50000
 lr_decay = 1./10
 rand_seed = 1024
 
@@ -74,8 +80,9 @@ weight_decay = cfg.TRAIN.WEIGHT_DECAY
 disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
 save_interval = cfg.TRAIN.SNAPSHOT_ITERS
-# load data        # PASCAL VOC 2007 : Total 5011 images, 15662 objects
+# load data
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
+test_imdb, test_roidb, _, _ = extract_roidb(test_name)
 train_size = len(roidb)
 sampler_batch = sampler(train_size, batch_size)
 dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
@@ -93,7 +100,12 @@ else:
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
 if pretrained_model:
-    network.load_net_pedestrians(pretrained_model, net)
+    try:
+        network.load_net_pedestrians(pretrained_model, net)
+        print('model is from multi-class pretrained')
+    except ValueError as e:
+        network.load_net(pretrained_model, net)
+        print('model is from binary-class pretrained (Pedestrians)')
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
@@ -122,9 +134,12 @@ if use_tensorboard:
 iters_per_epoch = int(train_size / batch_size)
 # training
 train_loss = 0
+previous_precision = 0.
+descend = 0
 step_cnt = 0
 cnt = 0
 re_cnt = False
+
 t = Timer()
 t.tic()
 
@@ -132,7 +147,7 @@ for epoch in range(start_epoch, end_epoch+1):
 
     tp, tf, fg, bg = 0., 0., 0, 0
     net.train()
-    if epoch % lr_decay_step == 0:
+    if cnt % lr_decay_step == 0:
         lr *= lr_decay
         params = train_net_params(net, cfg, lr)
         optimizer = torch.optim.SGD(params, momentum=momentum)
@@ -198,11 +213,28 @@ for epoch in range(start_epoch, end_epoch+1):
         if cnt % save_interval == 0 and cnt > 0:
             save_dir = os.path.join(output_dir, model_name)
             make_dir(save_dir)
-            save_name = os.path.join(save_dir, '{}_pedestrians_{}_{}_b{}.h5'
-                                     .format(model_name, cnt, fg_thresh, batch_size))
+            save_name = os.path.join(save_dir, '{}_{}_{}_{}_b{}.h5'
+                                     .format(imdb_name, cnt, model_name, fg_thresh, batch_size))
             network.save_net(save_name, net)
             print('save model: {}'.format(save_name))
-
+            if tp/fg*100 > 90:
+                print('Entering Test Phase ...')
+                f = open('precision.txt', 'a')
+                precision = test(net, test_imdb, test_roidb)
+                f.write(save_name + '  ----{:.2f}%\n'.format(precision))
+                f.close()
+                if previous_precision == 0.: previous_precision = precision
+                else:
+                    if previous_precision > precision:
+                        descend += 1
+                        print('Precision decreased {:.2f}% -> {:.2f}% ...'\
+                              .format(previous_precision, precision))
+                        if descend == 2: raise Exception('test set Precision decreased. Stop Training')
+                        else:
+                            previous_precision = precision
+                            import warnings
+                            warnings.warn('test set Precision decreased. Keep Watching')
+                    else: previous_precision = precision
         if re_cnt:
             train_loss = 0
             tp, tf, fg, bg = 0., 0., 0, 0

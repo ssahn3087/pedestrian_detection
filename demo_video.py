@@ -2,8 +2,8 @@ import cv2
 import numpy as np
 from faster_rcnn import network
 from faster_rcnn.network import init_data
-from faster_rcnn.faster_rcnn import FasterRCNN as FasterRCNN_VGG
-from faster_rcnn.faster_rcnn2 import FasterRCNN as FasterRCNN_RES
+from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
+from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 from faster_rcnn.datasets.factory import get_imdb

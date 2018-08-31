@@ -17,6 +17,7 @@ import faster_rcnn.network as network
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
+from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.vgg16 import VGG16
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
@@ -169,7 +170,10 @@ class FasterRCNN(nn.Module):
 
         self.rpn = RPN()
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
-        self.roi_pool = RoIPool(7, 7, 1.0/16)
+        if cfg.POOLING_MODE == 'align':
+            self.roi_pool = RoIAlign(7, 7, 1.0/16)
+        elif cfg.POOLING_MODE == 'pool':
+            self.roi_pool = RoIPool(7, 7, 1.0/16)
         self.fc6 = FC(512 * 7 * 7, 4096)
         self.fc7 = FC(4096, 4096)
         self.score_fc = FC(4096, self.n_classes, relu=False)

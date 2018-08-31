@@ -19,7 +19,7 @@ class CaltechPedestrians(imdb):
         # object image condition ex) bbox of object is too small to recognize
         self.image_set = image_set
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 10
+        self.scene_per_episode_max = 5 if image_set == 'test' else 15
         self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -200,7 +200,6 @@ class CaltechPedestrians(imdb):
         return image_path
 
 
-
     def _load_image_set_index(self):
         """
         Load the indexes listed in this dataset's image set file.
@@ -234,9 +233,10 @@ class CaltechPedestrians(imdb):
                 video_name = video_path.split("/")[-1]
                 unit = self.annotations[set_name][video_name]["frames"]
                 for fid, v in unit.items():
-                    _str = unit[fid][0]['str']
-                    _end = unit[fid][0]['end']
-                    episodes[(set_name, video_name, _str, _end)].append(fid)
+                    for i, obj in enumerate(unit[fid]):
+                        _str = unit[fid][i]['str']
+                        _end = unit[fid][i]['end']
+                        episodes[(set_name, video_name, _str, _end)].append(fid)
         print("CaltechPedestrians dataset consists of {} episodes".format(len(episodes)))
         return episodes
 
@@ -251,6 +251,7 @@ class CaltechPedestrians(imdb):
             for fid in np.asarray(fids)[indices]:
                 index = '{}/{}/{}'.format(set_name, video_name, fid)
                 new_index.append(index)
+        new_index = list(set(new_index))
         new_index = np.asarray(new_index)
         image_index = np.asarray(image_index)
         match_indices = np.where(np.isin(image_index, new_index))[0]
