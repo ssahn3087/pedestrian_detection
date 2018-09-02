@@ -13,7 +13,7 @@ from faster_rcnn.rpn_msr.anchor_target_layer import anchor_target_layer as ancho
 from faster_rcnn.rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
 from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
-import faster_rcnn.network as network
+from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
@@ -389,17 +389,43 @@ class FasterRCNN(nn.Module):
 
         return blob, np.array(im_scale_factors)
 
-    def load_from_npz(self, params):
-        self.rpn.load_from_npz(params)
+    def load_pretrained_vgg16(self, fname):
+        try:
+            params = np.load(fname, encoding='latin1').item()
+        except FileNotFoundError as e:
+            print(e)
+            print('--------Need to Download Pretrained Model for VGG16')
+        print("loaded vgg16 model from %s" % fname)
+        # vgg16
+        vgg16_dict = self.rpn.features.state_dict()
+        for name, val in vgg16_dict.items():
+            # # print name
+            # # print val.size()
+            # # print param.size()
+            if name.find('bn.') >= 0:
+                continue
+            i, j = int(name[4]), int(name[6]) + 1
+            ptype = 'weights' if name[-1] == 't' else 'biases'
+            key = 'conv{}_{}'.format(i, j)
+            param = torch.from_numpy(params[key][ptype])
 
-        pairs = {'fc6.fc': 'fc6', 'fc7.fc': 'fc7', 'score_fc.fc': 'cls_score', 'bbox_fc.fc': 'bbox_pred'}
-        own_dict = self.state_dict()
+            if ptype == 'weights':
+                param = param.permute(3, 2, 0, 1)
+
+            val.copy_(param)
+
+        # fc6 fc7
+        frcnn_dict = self.state_dict()
+        pairs = {'fc6.fc': 'fc6', 'fc7.fc': 'fc7'}
         for k, v in pairs.items():
             key = '{}.weight'.format(k)
-            param = torch.from_numpy(params['{}/weights:0'.format(v)]).permute(1, 0)
-            own_dict[key].copy_(param)
+            param = torch.from_numpy(params[v]['weights']).permute(1, 0)
+            frcnn_dict[key].copy_(param)
 
             key = '{}.bias'.format(k)
-            param = torch.from_numpy(params['{}/biases:0'.format(v)])
-            own_dict[key].copy_(param)
+            param = torch.from_numpy(params[v]['biases'])
+            frcnn_dict[key].copy_(param)
 
+    def _init_faster_rcnn_vgg16(self):
+        weights_normal_init(self)
+        self.load_pretrained_vgg16(self.rpn.features.model_path)
