@@ -34,7 +34,7 @@ def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
 
 class RPN(nn.Module):
 
-    def __init__(self):
+    def __init__(self, debug=False):
         super(RPN, self).__init__()
 
         self.anchor_scales = cfg.ANCHOR_SCALES
@@ -55,6 +55,9 @@ class RPN(nn.Module):
         # loss
         self.cross_entropy = 0
         self.loss_box = 0
+
+        # for log
+        self.debug=debug
 
     @property
     def loss(self):
@@ -104,7 +107,15 @@ class RPN(nn.Module):
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
         self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label).mean()
-        fg_cnt = torch.sum(rpn_label.data.ne(0))
+        # for log
+        if self.debug:
+            fg_box = torch.sum(rpn_label.data.ne(0))
+            maxv, predict = rpn_cls_score.data.max(1)
+            tp = rpn_label.data.eq(predict) * rpn_label.data.ne(0)
+            self.tp = torch.sum(tp) if fg_box > 0 else 0
+            self.fg_box = fg_box
+
+
 
         rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
@@ -168,7 +179,7 @@ class FasterRCNN(nn.Module):
             self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
-        self.rpn = RPN()
+        self.rpn = RPN(debug=debug)
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0/16)

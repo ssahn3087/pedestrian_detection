@@ -14,19 +14,7 @@ from faster_rcnn.utils.cython_bbox import bbox_overlaps
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 
 
-# hyper-parameters
-# ------------
-imdb_name = 'CaltechPedestrians_test'
-cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-model_dir = 'data/test_phase/'
-models = os.listdir(model_dir)
-pretrained_model = [os.path.join(model_dir, model) for model in models]
-pretrained_model.sort()
-cfg_from_file(cfg_file)
-is_resnet = cfg.RESNET.IS_TRUE
-imdb = get_imdb(imdb_name)
-prepare_roidb(imdb)
-roidb = imdb.roidb
+
 
 def test(detector, imdb, roidb):
 
@@ -64,6 +52,19 @@ def test(detector, imdb, roidb):
     return tp/fg*100
 
 if __name__ == '__main__':
+    # hyper-parameters
+    # ------------
+    imdb_name = 'CaltechPedestrians_test'
+    cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
+    model_dir = 'data/test_phase/'
+    models = os.listdir(model_dir)
+    pretrained_model = [os.path.join(model_dir, model) for model in models]
+    pretrained_model.sort()
+    cfg_from_file(cfg_file)
+    is_resnet = cfg.RESNET.IS_TRUE
+    imdb = get_imdb(imdb_name)
+    prepare_roidb(imdb)
+    roidb = imdb.roidb
     f = open(os.path.join(model_dir,'precision.txt'), 'w')
 
     for model in pretrained_model:

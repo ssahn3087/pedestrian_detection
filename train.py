@@ -33,22 +33,22 @@ def log_print(text, color=None, on_color=None, attrs=None):
         print(text)
 
 
-
 # hyper-parameters
 # ------------
 
-# imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians_train'
+imdb_name = 'voc_2007_trainval'
+#imdb_name = 'CaltechPedestrians_train'
 test_name = 'CaltechPedestrians_test'
 # imdb_name = 'coco_2017_train'
-# test_name = 'coco_2017_val'
+#test_name = 'coco_2017_val'
 
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
+
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'CaltechPedestrians_90000_vgg16_0.7_b1.h5'
+pre_model_name = 'VGG_imagenet.npy'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -82,7 +82,7 @@ log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
 save_interval = cfg.TRAIN.SNAPSHOT_ITERS
 # load data
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
-test_imdb, test_roidb, _, _ = extract_roidb(test_name)
+#test_imdb, test_roidb, _, _ = extract_roidb(test_name)
 train_size = len(roidb)
 sampler_batch = sampler(train_size, batch_size)
 dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
@@ -98,14 +98,15 @@ if is_resnet:
 else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
+network.load_pretrained_npy(pretrained_model, net)
 network.weights_normal_init(net, dev=0.01)
-if pretrained_model:
-    try:
-        network.load_net_pedestrians(pretrained_model, net)
-        print('model is from multi-class pretrained')
-    except ValueError as e:
-        network.load_net(pretrained_model, net)
-        print('model is from binary-class pretrained (Pedestrians)')
+# if pretrained_model:
+#     try:
+#         network.load_net_pedestrians(pretrained_model, net)
+#         print('model is from multi-class pretrained')
+#     except ValueError as e:
+#         network.load_net(pretrained_model, net)
+#         print('model is from binary-class pretrained (Pedestrians)')
 blob = init_data(is_cuda=True)
 
 # set net to be prepared to train
@@ -145,7 +146,7 @@ t.tic()
 
 for epoch in range(start_epoch, end_epoch+1):
 
-    tp, tf, fg, bg = 0., 0., 0, 0
+    tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
     net.train()
     if cnt % lr_decay_step == 0:
         lr *= lr_decay
@@ -161,13 +162,15 @@ for epoch in range(start_epoch, end_epoch+1):
         # forward
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
-        loss = net.loss + net.rpn.loss
-
+        # loss = net.loss + net.rpn.loss
+        loss = net.rpn.loss
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)
             fg += net.fg_cnt
             bg += net.bg_cnt
+            tp_box = float(net.rpn.tp)
+            fg_box = net.rpn.fg_box
 
         train_loss += loss.data[0]
         step_cnt += 1
@@ -191,7 +194,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 if fg == 0 or bg == 0:
                     pass
                 else:
-                    log_print('\tTP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' % (tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
+                    log_print('\tTP_RPN: %.2f%%, TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' %
+                              (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
                         net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
                         net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
@@ -237,7 +241,7 @@ for epoch in range(start_epoch, end_epoch+1):
                     else: previous_precision = precision
         if re_cnt:
             train_loss = 0
-            tp, tf, fg, bg = 0., 0., 0, 0
+            tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
             step_cnt = 0
             t.tic()
             re_cnt = False
