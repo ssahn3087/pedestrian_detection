@@ -39,8 +39,8 @@ class RPN(nn.Module):
         self.anchor_scales = cfg.ANCHOR_SCALES
         self.anchor_ratios = cfg.ANCHOR_RATIOS
         self.feat_stride = cfg.FEAT_STRIDE[0]
-
-        self._resnet = RESNET()
+        self.res_model = cfg.RES.MODEL
+        self._resnet = RESNET(self.res_model)
         self.conv1 = Conv2d(1024, 512, 3, same_padding=True)
         self.score_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 2, 1, relu=False, same_padding=False)
         self.bbox_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 4, 1, relu=False, same_padding=False)

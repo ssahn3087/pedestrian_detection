@@ -14,7 +14,7 @@ import glob
 from faster_rcnn.pycocotools.coco import COCO
 from faster_rcnn.pycocotools.cocoeval import COCOeval
 
-coco_set = 'data/coco/annotations/instances_train2017.json'
+coco_set = 'data/coco/annotations/instances_val2017.json'
 train_set = 'data/CaltechPedestrians/images/train'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 cfg_from_file(cfg_file)

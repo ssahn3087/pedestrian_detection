@@ -34,7 +34,7 @@ def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
 
 class RPN(nn.Module):
 
-    def __init__(self):
+    def __init__(self, debug=False):
         super(RPN, self).__init__()
 
         self.anchor_scales = cfg.ANCHOR_SCALES
@@ -56,9 +56,12 @@ class RPN(nn.Module):
         self.cross_entropy = 0
         self.loss_box = 0
 
+        # for log
+        self.debug = debug
+
     @property
     def loss(self):
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
 
@@ -104,7 +107,15 @@ class RPN(nn.Module):
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
         self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label).mean()
-        fg_cnt = torch.sum(rpn_label.data.ne(0))
+        # for log
+        if self.debug:
+            fg_box = torch.sum(rpn_label.data.ne(0))
+            maxv, predict = rpn_cls_score.data.max(1)
+            tp = rpn_label.data.eq(predict) * rpn_label.data.ne(0)
+            self.tp = torch.sum(tp) if fg_box > 0 else 0
+            self.fg_box = fg_box
+
+
 
         rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
@@ -168,7 +179,7 @@ class FasterRCNN(nn.Module):
             self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
-        self.rpn = RPN()
+        self.rpn = RPN(debug = debug)
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0/16)
@@ -192,7 +203,7 @@ class FasterRCNN(nn.Module):
         # print self.loss_box
         # print self.rpn.cross_entropy
         # print self.rpn.loss_box
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -272,8 +283,8 @@ class FasterRCNN(nn.Module):
         if bg_cnt > 0:
             ce_weights[0] = float(fg_cnt) / bg_cnt
         ce_weights = ce_weights.cuda()
+        # cross_entropy = F.cross_entropy(cls_score, rois_label).mean()
         cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights).mean()
-
         loss_box = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws).mean()
 
         return cross_entropy, loss_box
