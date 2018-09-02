@@ -13,7 +13,7 @@ from faster_rcnn.rpn_msr.anchor_target_layer import anchor_target_layer as ancho
 from faster_rcnn.rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
 from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
-import faster_rcnn.network as network
+from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
@@ -33,13 +33,13 @@ def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
 
 class RPN(nn.Module):
 
-    def __init__(self):
+    def __init__(self, debug=False):
         super(RPN, self).__init__()
 
         self.anchor_scales = cfg.ANCHOR_SCALES
         self.anchor_ratios = cfg.ANCHOR_RATIOS
         self.feat_stride = cfg.FEAT_STRIDE[0]
-        self.res_model = cfg.RES.MODEL
+        self.res_model = cfg.RESNET.MODEL
         self._resnet = RESNET(self.res_model)
         self.conv1 = Conv2d(1024, 512, 3, same_padding=True)
         self.score_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 2, 1, relu=False, same_padding=False)
@@ -54,6 +54,9 @@ class RPN(nn.Module):
         # loss
         self.cross_entropy = 0
         self.loss_box = 0
+
+        # for log
+        self.debug = debug
 
     @property
     def loss(self):
@@ -103,7 +106,12 @@ class RPN(nn.Module):
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
         self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label).mean()
-        fg_cnt = torch.sum(rpn_label.data.ne(0))
+        if self.debug:
+            fg_box = torch.sum(rpn_label.data.ne(0))
+            maxv, predict = rpn_cls_score.data.max(1)
+            tp = rpn_label.data.eq(predict) * rpn_label.data.ne(0)
+            self.tp = torch.sum(tp) if fg_box > 0 else 0
+            self.fg_box = fg_box
 
         rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
@@ -166,7 +174,7 @@ class FasterRCNN(nn.Module):
             self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
-        self.rpn = RPN()
+        self.rpn = RPN(debug=debug)
         self.resnet = self.rpn._resnet
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         self.roi_pool = RoIPool(7, 7, 1.0/16)
@@ -368,17 +376,6 @@ class FasterRCNN(nn.Module):
 
         return blob, np.array(im_scale_factors)
 
-    def load_from_npz(self, params):
-        self.rpn.load_from_npz(params)
-
-        pairs = {'fc6.fc': 'fc6', 'fc7.fc': 'fc7', 'score_fc.fc': 'cls_score', 'bbox_fc.fc': 'bbox_pred'}
-        own_dict = self.state_dict()
-        for k, v in pairs.items():
-            key = '{}.weight'.format(k)
-            param = torch.from_numpy(params['{}/weights:0'.format(v)]).permute(1, 0)
-            own_dict[key].copy_(param)
-
-            key = '{}.bias'.format(k)
-            param = torch.from_numpy(params['{}/biases:0'.format(v)])
-            own_dict[key].copy_(param)
-
+    def _init_faster_rcnn_resnet(self):
+        weights_normal_init(self)
+        self.resnet.load_pretrained_resnet()

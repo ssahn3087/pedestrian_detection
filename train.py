@@ -37,24 +37,24 @@ def log_print(text, color=None, on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 
-# imdb_name = 'voc_2007_trainval'
+imdb_name = 'voc_2007_trainval'
 # imdb_name = 'CaltechPedestrians_train'
-# test_name = 'CaltechPedestrians_test'
-imdb_name = 'coco_2017_train'
-test_name = 'coco_2017_val'
+test_name = 'CaltechPedestrians_test'
+#imdb_name = 'coco_2017_train'
+#test_name = 'coco_2017_val'
 
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'coco_2017_train_4_vgg16_0.7_b1.h5'
+pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 3
+lr_decay_step = 5
 lr_decay = 1./10
 rand_seed = 1024
 
@@ -95,12 +95,12 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 if is_resnet:
     model_name = cfg.RESNET.MODEL
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
+    net._init_faster_rcnn_resnet()
 else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
-network.weights_normal_init(net, dev=0.01)
-#network.load_pretrained_npy(pretrained_model, net)
-network.load_net(pretrained_model, net)
+    net._init_faster_rcnn_vgg16()
+#network.load_net(pretrained_model, net)
 #
 # if pretrained_model:
 #     try:

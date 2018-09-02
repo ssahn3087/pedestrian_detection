@@ -163,36 +163,53 @@ class ResNet(nn.Module):
 
 
 
-def resnet50(res_model):
+def resnet50():
     """Constructs a ResNet-50 model.
     Args:
     pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    if res_model =='res50':
-        model = ResNet(Bottleneck, [3, 4, 6, 3])
+    model = ResNet(Bottleneck, [3, 4, 6, 3])
     return model
 
+def resnet101():
+    """Constructs a ResNet-101 model.
+    Args:
+      pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3])
+    return model
 
 class RESNET(nn.Module):
-    def __init__(self):
+    def __init__(self, res_model):
         super(RESNET, self).__init__()
-        self.model_path = 'data/pretrained_model/resnet50_imagenet.pth'
-        self.resnet = resnet50()
-        self._load_resnet()
+        if res_model == 'res50':
+            self.model_path = 'data/pretrained_model/base/resnet50_imagenet.pth'
+            self.resnet = resnet50()
+        elif res_model == 'res101':
+            self.model_path = 'data/pretrained_model/base/resnet101_imagenet.pth'
+            self.resnet = resnet101()
+        else:
+            print('Resnet model is not defined, check configure file')
+            raise ModuleNotFoundError
+        self.features = nn.Sequential(self.resnet.conv1, self.resnet.bn1, self.resnet.relu,
+                                      self.resnet.maxpool, self.resnet.layer1,
+                                      self.resnet.layer2, self.resnet.layer3)
+        self.fc_layer = nn.Sequential(self.resnet.layer4)
+        self.load_pretrained_resnet = self._load_resnet
 
     def forward(self, im_data):
         x = self.features(im_data)
         return x
 
     def _load_resnet(self):
+        import os
+        assert os.path.exists(self.model_path), \
+            'Pretrained model does not exist: {}'.format(self.model_path)
         print("Loading pretrained weights from %s" % (self.model_path))
 
         state_dict = torch.load(self.model_path)
         self.resnet.load_state_dict({k: v for k, v in state_dict.items() if k in self.resnet.state_dict()})
-        self.features = nn.Sequential(self.resnet.conv1, self.resnet.bn1, self.resnet.relu,
-                                      self.resnet.maxpool, self.resnet.layer1,
-                                      self.resnet.layer2, self.resnet.layer3)
-        self.fc_layer = nn.Sequential(self.resnet.layer4)
+
         # Fix blocks
         for p in self.features[0].parameters(): p.requires_grad=False
         for p in self.features[1].parameters(): p.requires_grad=False

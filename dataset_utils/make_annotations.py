@@ -20,6 +20,7 @@ post_class = ['person', 'bicycle', 'car', 'motorcycle', 'bus', 'boat', 'train', 
 sub_objs = 5000
 main_objs = 3000
 min = 500
+
 def extract_by_post_class(post_class):
     dataset = json.load(open(coco_set, 'r'))
     for k,v in dataset.items():
@@ -51,7 +52,7 @@ def extract_by_post_class(post_class):
                 Count[ann['category_id']] += 1
                 annotations.append(ann)
                 image_id.append(ann['image_id'])
-    if main_objs > 0 :
+    if main_objs > 0:
         indices = np.sort(npr.choice(len(annotations_im), main_objs, replace=False))
         annotations_im = np.asarray(annotations_im)[indices].tolist()
         image_id_im = np.asarray(image_id_im)[indices].tolist()
