@@ -84,10 +84,10 @@ __C.TRAIN.ASPECTS = (1,)
 
 # Scales to use during training (can list multiple scales)
 # Each scale is the pixel size of an image's shortest side
-__C.TRAIN.SCALES = (600,)
+__C.TRAIN.SCALES = (800,)
 
 # Max pixel size of the longest side of a scaled input image
-__C.TRAIN.MAX_SIZE = 1000
+__C.TRAIN.MAX_SIZE = 1200
 
 # Trim size for input images to create minibatch
 __C.TRAIN.TRIM_HEIGHT = 600
@@ -242,6 +242,8 @@ __C.RESNET.MAX_POOL = False
 __C.RESNET.FIXED_BLOCKS = 1
 
 __C.RESNET.IS_TRUE = False
+
+__C.RESNET.MODEL = 'resnet50'
 
 __C.POOLING_MODE = 'align'
 

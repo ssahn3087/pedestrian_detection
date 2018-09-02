@@ -163,12 +163,13 @@ class ResNet(nn.Module):
 
 
 
-def resnet50():
+def resnet50(res_model):
     """Constructs a ResNet-50 model.
     Args:
     pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3])
+    if res_model =='res50':
+        model = ResNet(Bottleneck, [3, 4, 6, 3])
     return model
 
 

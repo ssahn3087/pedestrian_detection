@@ -57,11 +57,11 @@ class RPN(nn.Module):
         self.loss_box = 0
 
         # for log
-        self.debug=debug
+        self.debug = debug
 
     @property
     def loss(self):
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
 
@@ -179,7 +179,7 @@ class FasterRCNN(nn.Module):
             self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
-        self.rpn = RPN(debug=debug)
+        self.rpn = RPN(debug = debug)
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0/16)
@@ -203,7 +203,7 @@ class FasterRCNN(nn.Module):
         # print self.loss_box
         # print self.rpn.cross_entropy
         # print self.rpn.loss_box
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -283,8 +283,8 @@ class FasterRCNN(nn.Module):
         if bg_cnt > 0:
             ce_weights[0] = float(fg_cnt) / bg_cnt
         ce_weights = ce_weights.cuda()
+        # cross_entropy = F.cross_entropy(cls_score, rois_label).mean()
         cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights).mean()
-
         loss_box = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws).mean()
 
         return cross_entropy, loss_box

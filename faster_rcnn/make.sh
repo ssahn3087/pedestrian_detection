@@ -5,7 +5,7 @@ CUDA_PATH=/usr/local/cuda/
 python setup.py build_ext --inplace
 rm -rf build
 
-CUDA_ARCH="-gencode arch=compute_50,code=sm_50"
+CUDA_ARCH="-gencode arch=compute_61,code=sm_61"
 
 # compile NMS
 cd nms/src

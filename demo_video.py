@@ -7,7 +7,6 @@ from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 from faster_rcnn.datasets.factory import get_imdb
-from Encoder import start_AVrecording, stop_AVrecording
 
 
 global video_file
@@ -18,11 +17,11 @@ output_file = 'demo/output.avi'
 fps = 30
 def test():
     import os
-    imdb_name = 'CaltechPedestrians'
+    imdb_name = 'CaltechPedestrians_test'
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'CaltechPedestrians_20000_resnet50_0.7_b1_f.h5'
+    pre_model_name = 'vgg16_pedestrians_2000_0.7_b1.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
 
