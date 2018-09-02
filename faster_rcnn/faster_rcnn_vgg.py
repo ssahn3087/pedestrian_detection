@@ -179,7 +179,7 @@ class FasterRCNN(nn.Module):
             self.classes = np.asarray(classes)
             self.n_classes = len(classes)
 
-        self.rpn = RPN(debug = debug)
+        self.rpn = RPN(debug=debug)
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0/16)
@@ -390,11 +390,10 @@ class FasterRCNN(nn.Module):
         return blob, np.array(im_scale_factors)
 
     def load_pretrained_vgg16(self, fname):
-        try:
-            params = np.load(fname, encoding='latin1').item()
-        except FileNotFoundError as e:
-            print(e)
-            print('--------Need to Download Pretrained Model for VGG16')
+        import os
+        assert os.path.exists(fname), \
+            'Pretrained model does not exist: {}'.format(fname)
+        params = np.load(fname, encoding='latin1').item()
         print("loaded vgg16 model from %s" % fname)
         # vgg16
         vgg16_dict = self.rpn.features.state_dict()

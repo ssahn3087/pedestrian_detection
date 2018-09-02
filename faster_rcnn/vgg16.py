@@ -12,7 +12,7 @@ import faster_rcnn.network as network
 class VGG16(nn.Module):
     def __init__(self, bn=False):
         super(VGG16, self).__init__()
-        self.model_path = 'data/pretrained_model/VGG_imagenet.npy'
+        self.model_path = 'data/pretrained_model/base/VGG_imagenet.npy'
 
         self.conv1 = nn.Sequential(Conv2d(3, 64, 3, same_padding=True, bn=bn),
                                    Conv2d(64, 64, 3, same_padding=True, bn=bn),

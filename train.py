@@ -95,6 +95,7 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 if is_resnet:
     model_name = cfg.RESNET.MODEL
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
+    net._init_faster_rcnn_resnet()
 else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
