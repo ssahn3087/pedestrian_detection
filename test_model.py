@@ -16,7 +16,7 @@ from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 
 
 
-def test(detector, imdb, roidb):
+def test(model, detector, imdb, roidb):
 
     detector.cuda()
     detector.eval()
@@ -75,6 +75,6 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
-        precision = test(detector, imdb, roidb)
+        precision = test(model, detector, imdb, roidb)
         f.write(model+'  ----{:.2f}%\n'.format(precision))
     f.close()

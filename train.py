@@ -48,13 +48,13 @@ test_name = 'coco_2017_val'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'VGG_imagenet.npy'
+pre_model_name = 'coco_2017_train_4_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
 end_epoch = 100
-lr_decay_step = 5
+lr_decay_step = 3
 lr_decay = 1./10
 rand_seed = 1024
 
@@ -99,8 +99,8 @@ else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
 network.weights_normal_init(net, dev=0.01)
-network.load_pretrained_npy(pretrained_model, net)
-#network.load_net(pretrained_model, net)
+#network.load_pretrained_npy(pretrained_model, net)
+network.load_net(pretrained_model, net)
 #
 # if pretrained_model:
 #     try:
