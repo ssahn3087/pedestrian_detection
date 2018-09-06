@@ -26,7 +26,7 @@ except ImportError:
     CrayonClient = None
 
 
-def log_print(text, color=None, on_color=None, attrs=None):
+def log_print(text, color='white', on_color=None, attrs=None):
     if cprint is not None:
         cprint(text, color=color, on_color=on_color, attrs=attrs)
     else:
@@ -37,8 +37,8 @@ def log_print(text, color=None, on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 
-imdb_name = 'voc_2007_trainval'
-# imdb_name = 'CaltechPedestrians_train'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians_triplet'
 test_name = 'CaltechPedestrians_test'
 #imdb_name = 'coco_2017_train'
 #test_name = 'coco_2017_val'
@@ -48,7 +48,7 @@ test_name = 'CaltechPedestrians_test'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
+pre_model_name = 'CaltechPedestrians_90000_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -84,7 +84,7 @@ save_interval = cfg.TRAIN.SNAPSHOT_ITERS
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
 test_imdb, test_roidb, _, _ = extract_roidb(test_name)
 train_size = len(roidb)
-sampler_batch = sampler(train_size, batch_size)
+sampler_batch = sampler(train_size, batch_size, cfg.TRIPLET.IS_TRUE)
 dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
                                                         imdb.num_classes, training=True)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
@@ -95,12 +95,12 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 if is_resnet:
     model_name = cfg.RESNET.MODEL
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
-    net._init_faster_rcnn_resnet()
+    net.init_module()
 else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
-    net._init_faster_rcnn_vgg16()
-#network.load_net(pretrained_model, net)
+    net.init_module()
+network.load_net(pretrained_model, net)
 #
 # if pretrained_model:
 #     try:
@@ -199,9 +199,9 @@ for epoch in range(start_epoch, end_epoch+1):
                 else:
                     log_print('\tTP_RPN: %.2f%%,TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' %
                               (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
-                    log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
+                    log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
                         net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
-                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
+                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), net.triplet_loss.data.cpu())
                     )
             re_cnt = True
 

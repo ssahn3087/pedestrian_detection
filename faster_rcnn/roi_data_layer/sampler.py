@@ -3,13 +3,15 @@ from torch.utils.data.sampler import Sampler
 
 class sampler(Sampler):
 
-    def __init__(self, train_size, batch_size):
+    def __init__(self, train_size, batch_size, triplet=False):
+        if triplet:
+            assert batch_size == 3, 'triplet loss training must have batch size (3)'
         self.num_data = train_size
         self.num_per_batch = int(train_size / batch_size)
         self.batch_size = batch_size
         self.range = torch.arange(0,batch_size).view(1, batch_size).long()
         self.leftover_flag = False
-        if train_size % batch_size:
+        if train_size % batch_size and not triplet:
             self.leftover = torch.arange(self.num_per_batch*batch_size, train_size).long()
             self.leftover_flag = True
 

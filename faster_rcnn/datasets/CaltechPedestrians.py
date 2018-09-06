@@ -4,6 +4,7 @@ import glob
 import pickle
 import scipy.sparse
 import numpy as np
+import random
 from PIL import Image
 import numpy.random as npr
 from faster_rcnn.datasets.imdb import imdb
@@ -15,22 +16,25 @@ class CaltechPedestrians(imdb):
 
     def __init__(self, image_set):
         imdb.__init__(self,  'CaltechPedestrians_' + image_set)
+        self.triplet = True if image_set == 'triplet' else False
         self._prefix = 'CaltechPedestrians'
+        self.image_set = 'train' if image_set == 'triplet' else image_set
+        self.num_triplet_set = 4000 if image_set == 'triplet' else 0
         # object image condition ex) bbox of object is too small to recognize
-        self.image_set = image_set
         self.area_thresh = 200.0
         self.scene_per_episode_max = 5 if image_set == 'test' else 15
         self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
         self.annotations = self._load_json_file()
+        self.base_id_dict, self.total_id = self.get_base_id_dict()
         self._image_index_default = self._load_image_set_index()
         self._image_ext = '.jpg'
         self._classes = ('__background__',  # always index 0 but no background data
                          'person')
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self._roidb_handler = self.gt_roidb
-        self._image_index = []
+        self._image_index = self.update_image_index()
 
     """
     Dataset from : http://www.vision.caltech.edu/Image_Datasets/CaltechPedestrians/
@@ -79,7 +83,8 @@ class CaltechPedestrians(imdb):
             if os.path.getsize(cache_file) > 0:
                 with open(cache_file, 'rb') as fid:
                     roidb = pickle.load(fid)
-                self.update_image_index(roidb)
+                assert len(roidb) == len(self.image_index), \
+                    'fatal error: the length of _image_index must be same with roidb'
                 print('{} gt roidb loaded from {}'.format(self.name, cache_file))
         except FileNotFoundError as e:
             print(str(e))
@@ -90,19 +95,20 @@ class CaltechPedestrians(imdb):
                 pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
         finally:
-            roidb = self.gather_by_episode(roidb)
-            print('{} images of CaltechPedestrians dataset loaded'.format(len(roidb)))
+            if self.triplet:
+                roidb = self.make_triplet_set(self.gather_by_id(roidb))
+            else:
+                roidb = self.gather_by_episode(roidb)
+            print('CaltechPedestrians dataset for {} : {} images loaded'.format(self.image_set,len(roidb)))
             return roidb
 
-    def update_image_index(self, roidb):
+    def update_image_index(self):
         image_set_file = os.path.join(self.cache_path, self.image_set + ".txt")
         f = open(image_set_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
         f.close()
-        self._image_index = image_index
-
-        assert len(self._image_index) == len(roidb), 'Create cache file again, ref.txt has been damaged'
+        return image_index
 
     def remove_none(self, gt_roidb):
         roidb = [db for db in gt_roidb if db is not None]
@@ -128,7 +134,7 @@ class CaltechPedestrians(imdb):
         objs = self.annotations[set_name][video_name]['frames'][fid]
 
         # Check abnormal data and Remove
-        objs = [obj for obj in objs if self.object_condition_satisfied(obj, index)]
+        objs = [obj for obj in objs if self.object_condition_satisfied(obj)]
 
         num_objs = len(objs)
         if num_objs == 0:
@@ -139,6 +145,7 @@ class CaltechPedestrians(imdb):
         # "Seg" area for pedestrian is just the box area
         seg_areas = np.zeros((num_objs), dtype=np.float32)
         ishards = np.zeros((num_objs), dtype=np.int32)
+        ids = np.zeros((num_objs), dtype=np.uint16)
         for ix, obj in enumerate(objs):
             pos = np.round(np.array(obj['pos'], dtype=np.float32))
             label = obj['lbl']
@@ -164,6 +171,7 @@ class CaltechPedestrians(imdb):
             gt_classes[ix] = cls
             overlaps[ix, cls] = 1.0
             seg_areas[ix] = w * h
+            ids[ix] = obj['id'] + self.base_id_dict[set_name, video_name]
             # diffc = unit_frame['occl']
             # difficult = 0 if diffc == None else diffc
             ishards[ix] = 0
@@ -174,7 +182,8 @@ class CaltechPedestrians(imdb):
                 'gt_ishard': ishards,
                 'gt_overlaps': overlaps,
                 'flipped': False,
-                'seg_areas': seg_areas}
+                'seg_areas': seg_areas,
+                'ids': ids}
 
     def image_id_at(self, i):
         """
@@ -199,7 +208,6 @@ class CaltechPedestrians(imdb):
             'Path does not exist: {}'.format(image_path)
         return image_path
 
-
     def _load_image_set_index(self):
         """
         Load the indexes listed in this dataset's image set file.
@@ -211,7 +219,7 @@ class CaltechPedestrians(imdb):
         f.close()
         return image_index
 
-    def object_condition_satisfied(self, obj, index):
+    def object_condition_satisfied(self, obj):
         pos = np.array(obj['pos'], dtype=np.float32)
         label = obj['lbl']
         occl = int(obj['occl'])
@@ -251,8 +259,7 @@ class CaltechPedestrians(imdb):
             for fid in np.asarray(fids)[indices]:
                 index = '{}/{}/{}'.format(set_name, video_name, fid)
                 new_index.append(index)
-        new_index = list(set(new_index))
-        new_index = np.asarray(new_index)
+        new_index = np.asarray(list(set(new_index)))
         image_index = np.asarray(image_index)
         match_indices = np.where(np.isin(image_index, new_index))[0]
         roidb = np.array(roidb)[match_indices].tolist()
@@ -262,3 +269,72 @@ class CaltechPedestrians(imdb):
         print('CaltechPedestrians dataset has {} images in total, Max per episode {} images' \
               .format(len(roidb), self.scene_per_episode_max))
         return roidb
+
+    def get_base_id_dict(self):
+        anns = self.annotations
+        base_id_dict = {}
+        base_id = 0
+        for set_name in anns.keys():
+            for video_name in anns[set_name].keys():
+                ids = []
+                for frame in anns[set_name][video_name]['frames'].values():
+                    for obj in frame:
+                        if obj['id'] not in ids:
+                            ids.append(obj['id'])
+                base_id_dict[set_name, video_name] = base_id
+                base_id += max(ids) + 1 if len(ids) != 0 else 0
+                if set_name == list(anns.keys())[-1] and video_name == list(anns[set_name].keys())[-1]:
+                    total_id = base_id
+        return base_id_dict, total_id
+
+    def gather_by_id(self, roidb):
+        image_index = self._image_index
+        new_index = []
+        new_roidb = []
+        for i, db in enumerate(roidb):
+            n_obj = len(db['boxes'])
+
+            for ix in range(n_obj):
+                unit_db = {}
+                for k in db.keys():
+                    if isinstance(db[k], (np.ndarray, np.generic)):
+                        unit_db[k] = np.expand_dims(db[k][ix], axis=0)
+                    elif isinstance(db[k], scipy.sparse.csr_matrix):
+                        unit_db[k] = scipy.sparse.csr_matrix(\
+                            np.expand_dims(db[k].toarray()[ix], axis=0))
+                    else:
+                        unit_db[k] = db[k]
+                new_roidb.append(unit_db)
+                new_index.append(image_index[i])
+        self._image_index = new_index
+        return new_roidb
+
+    def make_triplet_set(self, roidb):
+        for i in range(len(self._image_index)):
+            roidb[i]['index'] = self._image_index[i]
+
+        id_roidb = {db['ids'][0]: [] for db in roidb}
+
+        for db in roidb:
+            id_roidb[db['ids'][0]] += [db]
+        for k in list(id_roidb.keys()):
+            if len(id_roidb[k]) < 2:
+                del id_roidb[k]
+        exist_ids = list(id_roidb.keys())
+        identical_different = []
+        while len(identical_different) != self.num_triplet_set:
+            call = tuple(npr.choice(exist_ids, 2, replace=False))
+            if call not in identical_different:
+                identical_different.append(call)
+        new_index = []
+        new_roidb = []
+        for twin in identical_different:
+            pos = random.sample(id_roidb[twin[0]], 2)
+            neg = random.sample(id_roidb[twin[1]], 1)
+            new_index.extend([pos[0]['index'], pos[1]['index'], neg[0]['index']])
+            new_roidb.extend([pos[0], pos[1], neg[0]])
+        for db in new_roidb:
+            db.pop('index', None)
+        self._image_index = new_index
+        return new_roidb
+
