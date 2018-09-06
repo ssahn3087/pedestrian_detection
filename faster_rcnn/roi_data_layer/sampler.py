@@ -14,6 +14,7 @@ class sampler(Sampler):
             self.leftover_flag = True
 
     def __iter__(self):
+
         rand_num = torch.randperm(self.num_per_batch).view(-1, 1) * self.batch_size
         self.rand_num = rand_num.expand(self.num_per_batch, self.batch_size) + self.range
 

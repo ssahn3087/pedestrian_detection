@@ -106,16 +106,20 @@ class RPN(nn.Module):
         rpn_cls_score = torch.index_select(rpn_cls_score.view(-1, 2), 0, rpn_keep)
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
-        self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label).mean()
-        # for log
+
+
+        ce_weights = torch.ones(rpn_cls_score.size(1))
+        fg_box = torch.sum(rpn_label.data.ne(0))
+        bg_box = rpn_label.data.numel() - fg_box
+        if bg_box > 0:
+            ce_weights[0] = float(fg_box) / bg_box
+        ce_weights = ce_weights.cuda()
+        self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label, weight=ce_weights).mean()
         if self.debug:
-            fg_box = torch.sum(rpn_label.data.ne(0))
             maxv, predict = rpn_cls_score.data.max(1)
             tp = rpn_label.data.eq(predict) * rpn_label.data.ne(0)
             self.tp = torch.sum(tp) if fg_box > 0 else 0
             self.fg_box = fg_box
-
-
 
         rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
 
@@ -169,8 +173,8 @@ class FasterRCNN(nn.Module):
                        'motorbike', 'person', 'pottedplant',
                        'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = (600,)
-    MAX_SIZE = 1000
+    SCALES = cfg.TRAIN.SCALES
+    MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()

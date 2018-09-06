@@ -54,7 +54,7 @@ def test(model, detector, imdb, roidb):
 if __name__ == '__main__':
     # hyper-parameters
     # ------------
-    imdb_name = 'CaltechPedestrians_test'
+    imdb_name = 'coco_2017_val'
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)

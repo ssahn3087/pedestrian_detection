@@ -49,12 +49,12 @@ def load_net(fname, net):
         v.copy_(param)
 
 
-def load_net_pedestrians(fname, net):
+def load_net_pedestrians(fname, net, person_key):
     import h5py
     h5f = h5py.File(fname, mode='r')
     cls_related_part = list(net.state_dict().keys())[-4:]
     own_dict = net.state_dict()
-    need_index = [0, 15]
+    need_index = [0, person_key]
     # num_classses = size of score_fc.fc.bias in net
     num_classes = len(list(net.state_dict().values())[-3])
 

@@ -26,7 +26,7 @@ except ImportError:
     CrayonClient = None
 
 
-def log_print(text, color=None, on_color=None, attrs=None):
+def log_print(text, color='blue', on_color=None, attrs=None):
     if cprint is not None:
         cprint(text, color=color, on_color=on_color, attrs=attrs)
     else:
@@ -37,18 +37,18 @@ def log_print(text, color=None, on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 
-imdb_name = 'voc_2007_trainval'
-# imdb_name = 'CaltechPedestrians_train'
+# imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians_train'
 test_name = 'CaltechPedestrians_test'
-#imdb_name = 'coco_2017_train'
-#test_name = 'coco_2017_val'
+# imdb_name = 'coco_2017_train'
+# test_name = 'coco_2017_val'
 
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
+pre_model_name = 'coco_2017_train_10_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -100,7 +100,10 @@ else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
     net._init_faster_rcnn_vgg16()
-#network.load_net(pretrained_model, net)
+
+# use pretrained model
+# network.load_net(pretrained_model, net)
+network.load_net_pedestrians(pretrained_model, net, 1)
 #
 # if pretrained_model:
 #     try:
@@ -143,11 +146,12 @@ step_cnt = 0
 cnt = 0
 re_cnt = False
 
+
 t = Timer()
 t.tic()
 
 for epoch in range(start_epoch, end_epoch+1):
-
+    pf, tot = 0., 0
     tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
     net.train()
     if epoch % lr_decay_step == 0:
@@ -197,6 +201,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 if fg == 0 or bg == 0:
                     pass
                 else:
+                    tot += 1
+                    pf += tp/fg*100
                     log_print('\tTP_RPN: %.2f%%,TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' %
                               (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
@@ -230,25 +236,19 @@ for epoch in range(start_epoch, end_epoch+1):
                              .format(imdb_name, epoch, model_name, fg_thresh, batch_size))
     network.save_net(save_name, net)
     print('save model: {}'.format(save_name))
-    if tp / fg * 100 > 90:
+    if pf/tot > 80:
         print('Entering Test Phase ...')
         f = open('precision.txt', 'a')
-        precision = test(net, test_imdb, test_roidb)
+        precision = test(save_name, net, test_imdb, test_roidb)
         f.write(save_name + '  ----{:.2f}%\n'.format(precision))
         f.close()
         if previous_precision == 0.:
             previous_precision = precision
         else:
             if previous_precision > precision:
-                descend += 1
                 print('Precision decreased {:.2f}% -> {:.2f}% ...' \
                       .format(previous_precision, precision))
-                if descend == 2:
-                    raise Exception('test set Precision decreased. Stop Training')
-                else:
-                    previous_precision = precision
-                    import warnings
-
-                    warnings.warn('test set Precision decreased. Keep Watching')
+                import warnings
+                warnings.warn('test set Precision decreased. Keep Watching')
             else:
                 previous_precision = precision

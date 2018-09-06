@@ -17,6 +17,7 @@ from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
 # from roi_pooling.modules.roi_pool_py import RoIPool
+from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.resnet import RESNET
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
@@ -105,9 +106,15 @@ class RPN(nn.Module):
         rpn_cls_score = torch.index_select(rpn_cls_score.view(-1, 2), 0, rpn_keep)
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
-        self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label).mean()
+
+        ce_weights = torch.ones(rpn_cls_score.size(1))
+        fg_box = torch.sum(rpn_label.data.ne(0))
+        bg_box = rpn_label.data.numel() - fg_box
+        if bg_box > 0:
+            ce_weights[0] = float(fg_box) / bg_box
+        ce_weights = ce_weights.cuda()
+        self.cross_entropy = F.cross_entropy(rpn_cls_score, rpn_label, weight=ce_weights).mean()
         if self.debug:
-            fg_box = torch.sum(rpn_label.data.ne(0))
             maxv, predict = rpn_cls_score.data.max(1)
             tp = rpn_label.data.eq(predict) * rpn_label.data.ne(0)
             self.tp = torch.sum(tp) if fg_box > 0 else 0
@@ -165,8 +172,8 @@ class FasterRCNN(nn.Module):
                        'motorbike', 'person', 'pottedplant',
                        'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = (600,)
-    MAX_SIZE = 1000
+    SCALES = cfg.TRAIN.SCALES
+    MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
@@ -177,7 +184,10 @@ class FasterRCNN(nn.Module):
         self.rpn = RPN(debug=debug)
         self.resnet = self.rpn._resnet
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
-        self.roi_pool = RoIPool(7, 7, 1.0/16)
+        if cfg.POOLING_MODE == 'align':
+            self.roi_pool = RoIAlign(7, 7, 1.0/16)
+        elif cfg.POOLING_MODE == 'pool':
+            self.roi_pool = RoIPool(7, 7, 1.0/16)
         self.fc_layer = self.resnet.fc_layer
         self.score_fc = FC(2048, self.n_classes, relu=False)
         self.bbox_fc = FC(2048, self.n_classes * 4, relu=False)
