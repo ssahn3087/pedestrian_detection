@@ -16,7 +16,6 @@ from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
-# from roi_pooling.modules.roi_pool_py import RoIPool
 from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.resnet import RESNET
@@ -106,7 +105,6 @@ class RPN(nn.Module):
         rpn_cls_score = torch.index_select(rpn_cls_score.view(-1, 2), 0, rpn_keep)
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
-
         ce_weights = torch.ones(rpn_cls_score.size(1))
         fg_box = torch.sum(rpn_label.data.ne(0))
         bg_box = rpn_label.data.numel() - fg_box
@@ -172,8 +170,8 @@ class FasterRCNN(nn.Module):
                        'motorbike', 'person', 'pottedplant',
                        'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = cfg.TRAIN.SCALES
-    MAX_SIZE = cfg.TRAIN.MAX_SIZE
+    SCALES = (600,)
+    MAX_SIZE = 1000
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
@@ -198,7 +196,7 @@ class FasterRCNN(nn.Module):
 
         # for log
         self.debug = debug
-
+        self.init_module = self._init_faster_rcnn_resnet
     @property
     def loss(self):
         # print self.cross_entropy

@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+import math
 from torch.autograd import Variable
 from datetime import datetime
 from faster_rcnn import network
@@ -37,11 +38,11 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 
-# imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians_train'
+#imdb_name = 'voc_2007_trainval'
+imdb_name = 'CaltechPedestrians_triplet'
 test_name = 'CaltechPedestrians_test'
-# imdb_name = 'coco_2017_train'
-# test_name = 'coco_2017_val'
+#imdb_name = 'coco_2017_train'
+#test_name = 'coco_2017_val'
 
 
 
@@ -84,7 +85,7 @@ save_interval = cfg.TRAIN.SNAPSHOT_ITERS
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
 test_imdb, test_roidb, _, _ = extract_roidb(test_name)
 train_size = len(roidb)
-sampler_batch = sampler(train_size, batch_size)
+sampler_batch = sampler(train_size, batch_size, cfg.TRIPLET.IS_TRUE)
 dataset = roibatchLoader(imdb, roidb, ratio_list, ratio_index, batch_size,
                                                         imdb.num_classes, training=True)
 dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
@@ -95,14 +96,12 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 if is_resnet:
     model_name = cfg.RESNET.MODEL
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
-    net._init_faster_rcnn_resnet()
+    net.init_module()
 else:
     model_name = 'vgg16'
     net = FasterRCNN_VGG(classes=imdb.classes, debug=_DEBUG)
-    net._init_faster_rcnn_vgg16()
-
-# use pretrained model
-# network.load_net(pretrained_model, net)
+    net.init_module()
+#network.load_net(pretrained_model, net)
 network.load_net_pedestrians(pretrained_model, net, 1)
 #
 # if pretrained_model:
@@ -146,7 +145,6 @@ step_cnt = 0
 cnt = 0
 re_cnt = False
 
-
 t = Timer()
 t.tic()
 
@@ -168,9 +166,14 @@ for epoch in range(start_epoch, end_epoch+1):
         # forward
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
-        #loss = net.rpn.loss
-        loss = net.loss + net.rpn.loss
-
+        loss = net.rpn.loss + net.loss
+        if math.isnan(loss.data[0]):
+            print(im_data.data.size())
+            print(im_info)
+            print(gt_boxes)
+            print(num_boxes)
+            print(net.tp, net.tf, net.fg_cnt, net.bg_cnt, net.rpn.tp, net.rpn.fg_box)
+            raise RuntimeError
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)
@@ -205,9 +208,9 @@ for epoch in range(start_epoch, end_epoch+1):
                     pf += tp/fg*100
                     log_print('\tTP_RPN: %.2f%%,TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d)' %
                               (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt))
-                    log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f' % (
+                    log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
                         net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
-                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy())
+                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), net.triplet_loss.data.cpu())
                     )
             re_cnt = True
 

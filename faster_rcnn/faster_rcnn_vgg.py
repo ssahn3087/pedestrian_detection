@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-
 from faster_rcnn.utils.blob import im_list_to_blob
 from faster_rcnn.nms.nms_wrapper import nms
 from faster_rcnn.rpn_msr.proposal_layer import proposal_layer as proposal_layer_py
@@ -16,13 +15,16 @@ from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
+from faster_rcnn.network import get_triplet_rois
 # from roi_pooling.modules.roi_pool_py import RoIPool
 from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.vgg16 import VGG16
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
+
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 cfg_from_file(cfg_file)
+
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
     dets = torch.cat((pred_boxes, scores.unsqueeze(1)), 1)
@@ -43,8 +45,10 @@ class RPN(nn.Module):
 
         self.features = VGG16(bn=False)
         self.conv1 = Conv2d(512, 512, 3, same_padding=True)
-        self.score_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 2, 1, relu=False, same_padding=False)
-        self.bbox_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 4, 1, relu=False, same_padding=False)
+        self.score_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 2, 1, relu=False,
+                                 same_padding=False)
+        self.bbox_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 4, 1, relu=False,
+                                same_padding=False)
 
         # define proposal layer
         self.proposal_layer = proposal_layer_py(self.feat_stride, self.anchor_scales, self.anchor_ratios)
@@ -74,7 +78,7 @@ class RPN(nn.Module):
 
         rpn_cls_score_reshape = self.reshape_layer(rpn_cls_score, 2)
         rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, dim=1)
-        rpn_cls_prob = self.reshape_layer(rpn_cls_prob_reshape, len(self.anchor_scales)*len(self.anchor_ratios)*2)
+        rpn_cls_prob = self.reshape_layer(rpn_cls_prob_reshape, len(self.anchor_scales) * len(self.anchor_ratios) * 2)
 
         # rpn boxes
         rpn_bbox_pred = self.bbox_conv(rpn_conv1)
@@ -82,7 +86,7 @@ class RPN(nn.Module):
         # proposal layer
         cfg_key = 'TRAIN' if self.training else 'TEST'
         rois = self.proposal_layer((rpn_cls_prob.data, rpn_bbox_pred.data, im_info,
-                                   cfg_key))
+                                    cfg_key))
 
         self.cross_entropy = 0
         self.loss_box = 0
@@ -107,7 +111,6 @@ class RPN(nn.Module):
         rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
         rpn_label = Variable(rpn_label.long())
 
-
         ce_weights = torch.ones(rpn_cls_score.size(1))
         fg_box = torch.sum(rpn_label.data.ne(0))
         bg_box = rpn_label.data.numel() - fg_box
@@ -129,7 +132,7 @@ class RPN(nn.Module):
         rpn_bbox_targets = Variable(rpn_bbox_targets)
 
         self.loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
-                                            rpn_bbox_outside_weights, sigma=3, dim=[1, 2, 3]).mean()
+                                        rpn_bbox_outside_weights, sigma=3, dim=[1, 2, 3]).mean()
 
         return self.cross_entropy, self.loss_box
 
@@ -167,14 +170,14 @@ class FasterRCNN(nn.Module):
     n_classes = 21
     # for pacal_voc but flexible
     classes = np.asarray(['__background__',
-                       'aeroplane', 'bicycle', 'bird', 'boat',
-                       'bottle', 'bus', 'car', 'cat', 'chair',
-                       'cow', 'diningtable', 'dog', 'horse',
-                       'motorbike', 'person', 'pottedplant',
-                       'sheep', 'sofa', 'train', 'tvmonitor'])
+                          'aeroplane', 'bicycle', 'bird', 'boat',
+                          'bottle', 'bus', 'car', 'cat', 'chair',
+                          'cow', 'diningtable', 'dog', 'horse',
+                          'motorbike', 'person', 'pottedplant',
+                          'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = cfg.TRAIN.SCALES
-    MAX_SIZE = cfg.TRAIN.MAX_SIZE
+    SCALES = (600,)
+    MAX_SIZE = 1000
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
@@ -186,9 +189,9 @@ class FasterRCNN(nn.Module):
         self.rpn = RPN(debug=debug)
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
-            self.roi_pool = RoIAlign(7, 7, 1.0/16)
+            self.roi_pool = RoIAlign(7, 7, 1.0 / 16)
         elif cfg.POOLING_MODE == 'pool':
-            self.roi_pool = RoIPool(7, 7, 1.0/16)
+            self.roi_pool = RoIPool(7, 7, 1.0 / 16)
         self.fc6 = FC(512 * 7 * 7, 4096)
         self.fc7 = FC(4096, 4096)
         self.score_fc = FC(4096, self.n_classes, relu=False)
@@ -197,17 +200,13 @@ class FasterRCNN(nn.Module):
         # loss
         self.cross_entropy = 0
         self.loss_box = 0
-
+        self.triplet_loss = 0
         # for log
         self.debug = debug
-
+        self.init_module = self._init_faster_rcnn_vgg16
     @property
     def loss(self):
-        # print self.cross_entropy
-        # print self.loss_box
-        # print self.rpn.cross_entropy
-        # print self.rpn.loss_box
-        return self.cross_entropy + self.loss_box
+        return self.cross_entropy + self.loss_box + self.triplet_loss
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -221,7 +220,6 @@ class FasterRCNN(nn.Module):
             roi_data = self.proposal_target_layer(rois, gt_boxes, num_boxes)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
             rois_label = Variable(rois_label.view(-1).long())
-
         else:
             rois_label = None
             rois_target = None
@@ -229,12 +227,12 @@ class FasterRCNN(nn.Module):
             rois_outside_ws = None
             self.cross_entropy = 0
             self.loss_box = 0
+            self.triplet_loss = 0
 
         rois = Variable(rois)
 
-
         # roi pool
-        pooled_features = self.roi_pool(features, rois.view(-1,5))
+        pooled_features = self.roi_pool(features, rois.view(-1, 5))
 
         x = pooled_features.view(pooled_features.size()[0], -1)
         x = self.fc6(x)
@@ -248,6 +246,7 @@ class FasterRCNN(nn.Module):
 
         self.cross_entropy = 0
         self.loss_box = 0
+        self.triplet_loss = 0
 
         if self.training:
             # select the corresponding columns according to roi labels
@@ -256,6 +255,11 @@ class FasterRCNN(nn.Module):
                                             rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
             bbox_pred = bbox_pred_select.squeeze(1)
             self.cross_entropy, self.loss_box = self.build_loss(cls_score, bbox_pred, roi_data)
+            # triplet loss
+            if cfg.TRIPLET.IS_TRUE:
+                triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.BG_NUM)
+                triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+                self.triplet_loss = self.lossless_triplet_loss(triplet_features)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -277,7 +281,7 @@ class FasterRCNN(nn.Module):
         if self.debug:
             maxv, predict = cls_score.data.max(1)
             tp = label.data.eq(predict) * label.data.ne(0)
-            tf = label.data.eq(0)*predict.eq(0)
+            tf = label.data.eq(0) * predict.eq(0)
             self.tp = torch.sum(tp) if fg_cnt > 0 else 0
             self.tf = torch.sum(tf)
             self.fg_cnt = fg_cnt
@@ -293,7 +297,47 @@ class FasterRCNN(nn.Module):
 
         return cross_entropy, loss_box
 
-    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0 ,nms_thresh=0.3):
+    def lossless_triplet_loss(self, triplet_features, scaling_factor = None):
+        """
+        lossless triplet loss implementation based on
+                            https://towardsdatascience.com/lossless-triplet-loss-7e932f990b24
+        :param triplet_features:
+        anchor -- the encodings for the anchor data
+        positive -- the encodings for the positive data (similar to anchor)
+        negative -- the encodings for the negative data (different from anchor)
+        N  --  The number of dimension
+        beta -- The scaling factor, N is recommended
+        epsilon -- The Epsilon value to prevent ln(0)
+        """
+
+        epsilon = 1e-8
+        triplet_features = torch.sigmoid(triplet_features)
+
+        anchor = triplet_features[0].view(-1)
+        positive = triplet_features[1].view(-1)
+        negative = triplet_features[2].view(-1)
+
+        N = anchor.numel()
+        beta = N if scaling_factor is None else scaling_factor
+
+        pos_dist = ((anchor - positive) ** 2)
+        neg_dist = ((anchor - negative) ** 2)
+
+        pos_dist = -torch.log(-torch.div(pos_dist, beta) + 1 + epsilon).sum(0)
+        neg_dist = -torch.log(-torch.div((N - neg_dist), beta) + 1 + epsilon).sum(0)
+
+        if triplet_features.size(0) > 3:
+            rem_features = triplet_features[3:]
+            bg_size = rem_features.size(0)
+            rem_features = rem_features.view(bg_size, -1)
+            rem_dist = ((anchor - rem_features) ** 2).sum(1)
+            rem_dist = -torch.log(-torch.div((N - rem_dist), beta) + 1 + epsilon).sum(0)
+        else:
+            rem_dist = 0
+        loss = neg_dist + pos_dist + rem_dist
+        return loss
+
+    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0, nms_thresh=0.3):
         scores = cls_prob.data.squeeze()
         # find class
         scores, inds = scores.max(1)
@@ -307,10 +351,10 @@ class FasterRCNN(nn.Module):
         if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # Optionally normalize targets by a precomputed mean and stdev
             box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                             + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+                         + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
 
         box_deltas = box_deltas.view(-1, 4 * self.n_classes)
-        box_deltas = torch.cat([box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)]\
+        box_deltas = torch.cat([box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)] \
                                 for i in range(len(inds))], 0)
         box_deltas = box_deltas.view(-1, 4)
         boxes, box_deltas = boxes.unsqueeze(0), box_deltas.unsqueeze(0)
@@ -326,6 +370,7 @@ class FasterRCNN(nn.Module):
         inds = inds.cpu().numpy()
 
         return pred_boxes, scores, self.classes[inds]
+
 
     def detect(self, image, blob, thr=0.3, nms_thresh=0.3):
         im_data, im_scales = self.get_image_blob(image)
@@ -344,9 +389,10 @@ class FasterRCNN(nn.Module):
 
         cls_prob, bbox_pred, rois = self(im_data, im_info, gt_boxes, num_boxes)
         pred_boxes, scores, classes = \
-            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape,\
-                                       min_score=thr, nms_thresh= nms_thresh)
+            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape, \
+                                       min_score=thr, nms_thresh=nms_thresh)
         return pred_boxes, scores, classes
+
 
     def get_image_blob_noscale(self, im):
         im_orig = im.astype(np.float32, copy=True)
@@ -359,15 +405,16 @@ class FasterRCNN(nn.Module):
 
         return blob, np.array(im_scale_factors)
 
+
     def get_image_blob(self, im):
         """Converts an image into a network input.
-        Arguments:
-            im (ndarray): a color image in BGR order
-        Returns:
-            blob (ndarray): a data blob holding an image pyramid
-            im_scale_factors (list): list of image scales (relative to im) used
-                in the image pyramid
-        """
+           Arguments:
+               im (ndarray): a color image in BGR order
+           Returns:
+               blob (ndarray): a data blob holding an image pyramid
+               im_scale_factors (list): list of image scales (relative to im) used
+                   in the image pyramid
+           """
         im_orig = im.astype(np.float32, copy=True)
         im_orig -= self.PIXEL_MEANS
 
@@ -392,6 +439,7 @@ class FasterRCNN(nn.Module):
         blob = im_list_to_blob(processed_ims)
 
         return blob, np.array(im_scale_factors)
+
 
     def load_pretrained_vgg16(self, fname):
         import os
@@ -428,6 +476,7 @@ class FasterRCNN(nn.Module):
             key = '{}.bias'.format(k)
             param = torch.from_numpy(params[v]['biases'])
             frcnn_dict[key].copy_(param)
+
 
     def _init_faster_rcnn_vgg16(self):
         weights_normal_init(self)

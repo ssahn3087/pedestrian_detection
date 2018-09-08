@@ -45,6 +45,7 @@ __C.ANCHOR_RATIOS = [0.5, 1, 2]
 __C.FEAT_STRIDE = [16, ]
 
 __C.NCLASSES = 21
+__C.POOLING_MODE = 'align'
 
 # multiscale training and testing
 __C.IS_MULTISCALE = False
@@ -54,6 +55,11 @@ __C.REGION_PROPOSAL = 'RPN'
 
 __C.NET_NAME = 'VGGnet'
 __C.SUBCLS_NAME = 'voxel_exemplars'
+
+__C.TRIPLET = edict()
+
+__C.TRIPLET.IS_TRUE = True
+__C.TRIPLET.BG_NUM = 3
 
 __C.TRAIN = edict()
 # Adam, Momentum, RMS
@@ -245,7 +251,7 @@ __C.RESNET.IS_TRUE = False
 
 __C.RESNET.MODEL = 'resnet50'
 
-__C.POOLING_MODE = 'align'
+
 
 
 

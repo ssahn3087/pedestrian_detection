@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import numpy as np
-
+import numpy.random as npr
 
 class Conv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, same_padding=False, bn=False):
@@ -195,3 +195,24 @@ def train_net_params(net, cfg, lr):
             else:
                 params += [{'params': [value], 'lr': lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
     return params
+
+
+def get_triplet_rois(rois, rois_label, bg_num=0):
+
+    # first and second batch are pos
+    # third batch is neg
+    rois = rois.data
+    batch_size = rois.size(0)
+    assert batch_size == 3, 'triplet loss must be based on batch size (3)'
+    rois_label = rois_label.view(batch_size, -1)
+    triplet_rois = Variable(torch.zeros(3 + bg_num, rois.size(2))).cuda()
+    for i in range(batch_size):
+        indices = torch.nonzero(rois_label[i].data == 1)
+        rand_id = torch.from_numpy(npr.choice(indices.size(0), 1)).long().cuda()
+        triplet_rois[i, :] = rois[i][rand_id]
+    if bg_num != 0:
+        indices = torch.nonzero(rois_label[2].data == 0)
+        rand_id = torch.from_numpy(npr.choice(indices.size(0), bg_num)).long().cuda()
+        triplet_rois[3:, :] = rois[2][rand_id]
+    return triplet_rois
+
