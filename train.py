@@ -233,7 +233,7 @@ for epoch in range(start_epoch, end_epoch+1):
         print('Entering Test Phase ...')
         f = open('precision.txt', 'a')
         precision = test(save_name, net, test_imdb, test_roidb)
-        match = id_match_test(save_name, net, test_imdb, test_roidb) if cfg.TRIPLET.IS_TRUE else 0.
+        match = id_match_test(save_name, net, test_imdb, test_roidb, cfg.TRIPLET.LOSS) if cfg.TRIPLET.IS_TRUE else 0.
         f.write(save_name + '  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
         f.close()
         if previous_precision == 0.:

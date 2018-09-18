@@ -24,10 +24,9 @@ def test(model, detector, imdb, roidb):
     detector.cuda()
     detector.eval()
 
-    print('load model successfully!')
+    print('Test Detection Performance with ', model.split('/')[-1])
     blob = init_data(is_cuda=True)
     tp, fg = 0, 0
-    print('Test Phase with ', model)
     test_num = len(roidb)
     # display_interval = 1000
     for i in range(test_num):
@@ -54,13 +53,21 @@ def test(model, detector, imdb, roidb):
     print('\tPrecision: %.2f%%, ' % (tp/fg*100), model)
     return tp/fg*100
 
-def id_match_test(model, detector, imdb, roidb):
 
+def id_match_test(model, detector, imdb, roidb, type='euc'):
+    from torch.nn.functional import cosine_similarity
+    def dist(f1, f2):
+        val = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
+        return val
+    def cos_sim(f1, f2):
+        val = 1.0 - cosine_similarity(f1, f2, dim=0).data.cpu().numpy()
+        return val
     detector.cuda()
     detector.eval()
+    val_func = dist if type =='euc' or type == 'log' else cos_sim
+    print('Test ID Match with ', model.split('/')[-1])
+
     match = 0
-    print('load model successfully!')
-    print('Test ID match rate ', model)
     batch_size = imdb.num_triplet_test_images
     test_num = len(roidb)
     blob = init_data(is_cuda=True)
@@ -72,19 +79,18 @@ def id_match_test(model, detector, imdb, roidb):
             image = cv2.imread(roidb[pt]['image'])
             gt_boxes = roidb[i]['boxes'].astype(np.float32)
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, norm=True))
-        init_dist = 1e15
+        init_val = 1e15
         for m in range(batch_size):
             for n in range(m+1, batch_size):
-                dist = (torch.sqrt((features[m] - features[n]) ** 2)).sum(0).data.cpu().numpy()
-                if dist < init_dist:
-                    init_dist = dist
+                val = val_func(features[m], features[n])
+                if val < init_val:
+                    init_val = val
                     min_m, min_n = m, n
         if roidb[batch_size * i + min_m]['ids'] == roidb[batch_size * i + min_n]['ids']:
             match += 1
-        if i % 1000 == 0 and i > 0: print('{:d}   {:.2f}%'.format(i, match / i * 100))
+        if (i+1) % 500 == 0 and i > 0: print('------------{:d}   {:.2f}%'.format(i*batch_size, match / i * 100))
     print('\tPrecision: %.2f%%, ' % (match / num_set * 100), model)
     return match / num_set * 100
-
 
 if __name__ == '__main__':
     # hyper-parameters
@@ -110,7 +116,7 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
-        match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
+        match = id_match_test(model, detector, imdb, roidb, type=cfg.TRIPLET.LOSS) if cfg.TRIPLET.IS_TRUE else 0.
         precision = test(model, detector, imdb, roidb)
         f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
     f.close()

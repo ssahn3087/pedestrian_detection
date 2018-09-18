@@ -361,7 +361,7 @@ class FasterRCNN(nn.Module):
         loss = 0. if isnan(loss.data[0]) else loss
         return loss
 
-    def cross_entropy_cosine_sim(self,triplet_features):
+    def cross_entropy_cosine_sim(self, triplet_features):
         """
         euclidean_distance_loss
         """
@@ -370,7 +370,7 @@ class FasterRCNN(nn.Module):
         positive = normalize(triplet_features[1].view(-1), dim=0)
         negative = normalize(triplet_features[2].view(-1), dim=0)
         scores = Variable(torch.zeros((2, 2)).cuda())
-        scores[:, 0] = cosine_similarity(anchor, positive, dim=0)
+        scores[:, 0].data.copy_(cosine_similarity(anchor, positive, dim=0))
         scores[0, 1] = 1.0 - cosine_similarity(anchor, negative, dim=0)
         labels = Variable(torch.zeros(2).long().cuda())
         labels[1] = 1
