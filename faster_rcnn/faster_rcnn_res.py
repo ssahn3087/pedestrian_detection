@@ -60,7 +60,7 @@ class RPN(nn.Module):
 
     @property
     def loss(self):
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
 
@@ -170,8 +170,8 @@ class FasterRCNN(nn.Module):
                        'motorbike', 'person', 'pottedplant',
                        'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = (600,)
-    MAX_SIZE = 1000
+    SCALES = cfg.TRAIN.SCALES
+    MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
@@ -199,11 +199,7 @@ class FasterRCNN(nn.Module):
         self.init_module = self._init_faster_rcnn_resnet
     @property
     def loss(self):
-        # print self.cross_entropy
-        # print self.loss_box
-        # print self.rpn.cross_entropy
-        # print self.rpn.loss_box
-        return self.cross_entropy + self.loss_box * 10
+        return self.cross_entropy + self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)

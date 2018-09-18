@@ -76,7 +76,7 @@ for split in ['71', '370']:
     __sets[name] = (lambda split=split: nthu(split))
 
 # Set up CaltechPedestrians Benchmark dataset
-for split in ['train', 'test', 'triplet']:
+for split in ['train', 'test', 'train_triplet','test_triplet']:
     name = 'CaltechPedestrians_{}'.format(split)
     __sets[name] = (lambda split=split: CaltechPedestrians(split))
 

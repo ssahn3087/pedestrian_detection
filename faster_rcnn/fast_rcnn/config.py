@@ -59,7 +59,8 @@ __C.SUBCLS_NAME = 'voxel_exemplars'
 __C.TRIPLET = edict()
 
 __C.TRIPLET.IS_TRUE = True
-__C.TRIPLET.BG_NUM = 3
+__C.TRIPLET.MAX_BG = 3
+__C.TRIPLET.LOSS = 'euc'
 
 __C.TRAIN = edict()
 # Adam, Momentum, RMS
@@ -90,10 +91,10 @@ __C.TRAIN.ASPECTS = (1,)
 
 # Scales to use during training (can list multiple scales)
 # Each scale is the pixel size of an image's shortest side
-__C.TRAIN.SCALES = (800,)
+__C.TRAIN.SCALES = [600]
 
 # Max pixel size of the longest side of a scaled input image
-__C.TRAIN.MAX_SIZE = 1200
+__C.TRAIN.MAX_SIZE = 800
 
 # Trim size for input images to create minibatch
 __C.TRAIN.TRIM_HEIGHT = 600
@@ -106,10 +107,10 @@ __C.TRAIN.IMS_PER_BATCH = 1
 __C.TRAIN.BATCH_SIZE = 128
 
 # Fraction of minibatch that is labeled foreground (i.e. class > 0)
-__C.TRAIN.FG_FRACTION = 0.2
+__C.TRAIN.FG_FRACTION = 0.3
 
 # Overlap threshold for a ROI to be considered foreground (if >= FG_THRESH)
-__C.TRAIN.FG_THRESH = 0.5
+__C.TRAIN.FG_THRESH = 0.7
 
 # Overlap threshold for a ROI to be considered background (class = 0 if
 # overlap in [LO, HI))

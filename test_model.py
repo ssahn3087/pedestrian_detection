@@ -9,6 +9,9 @@ from faster_rcnn.network import train_net_params
 from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
 from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.datasets.factory import get_imdb
+from faster_rcnn.roi_data_layer.sampler import sampler
+from faster_rcnn.roi_data_layer.roidb import extract_roidb
+from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
 from faster_rcnn.roi_data_layer.roidb import prepare_roidb
 from faster_rcnn.utils.cython_bbox import bbox_overlaps
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
@@ -51,10 +54,42 @@ def test(model, detector, imdb, roidb):
     print('\tPrecision: %.2f%%, ' % (tp/fg*100), model)
     return tp/fg*100
 
+def id_match_test(model, detector, imdb, roidb):
+
+    detector.cuda()
+    detector.eval()
+    match = 0
+    print('load model successfully!')
+    print('Test ID match rate ', model)
+    batch_size = imdb.num_triplet_test_images
+    test_num = len(roidb)
+    blob = init_data(is_cuda=True)
+    num_set = int(test_num/batch_size)
+    for i in range(num_set):
+        features = []
+        for k in range(batch_size):
+            pt = batch_size * i + k
+            image = cv2.imread(roidb[pt]['image'])
+            gt_boxes = roidb[i]['boxes'].astype(np.float32)
+            features.append(detector.extract_feature_vector(image, blob, gt_boxes, norm=True))
+        init_dist = 1e15
+        for m in range(batch_size):
+            for n in range(m+1, batch_size):
+                dist = (torch.sqrt((features[m] - features[n]) ** 2)).sum(0).data.cpu().numpy()
+                if dist < init_dist:
+                    init_dist = dist
+                    min_m, min_n = m, n
+        if roidb[batch_size * i + min_m]['ids'] == roidb[batch_size * i + min_n]['ids']:
+            match += 1
+        if i % 1000 == 0 and i > 0: print('{:d}   {:.2f}%'.format(i, match / i * 100))
+    print('\tPrecision: %.2f%%, ' % (match / num_set * 100), model)
+    return match / num_set * 100
+
+
 if __name__ == '__main__':
     # hyper-parameters
     # ------------
-    imdb_name = 'coco_2017_val'
+    imdb_name = 'CaltechPedestrians_test_triplet'
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)
@@ -65,7 +100,7 @@ if __name__ == '__main__':
     imdb = get_imdb(imdb_name)
     prepare_roidb(imdb)
     roidb = imdb.roidb
-    f = open(os.path.join(model_dir,'precision.txt'), 'w')
+    f = open(os.path.join(model_dir, 'precision.txt'), 'a')
 
     for model in pretrained_model:
         if model.endswith('txt'):
@@ -75,6 +110,7 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
+        match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
         precision = test(model, detector, imdb, roidb)
-        f.write(model+'  ----{:.2f}%\n'.format(precision))
+        f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
     f.close()

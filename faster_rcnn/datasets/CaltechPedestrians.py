@@ -11,15 +11,15 @@ from faster_rcnn.datasets.imdb import imdb
 from faster_rcnn.fast_rcnn.config import cfg
 from collections import defaultdict
 
-
 class CaltechPedestrians(imdb):
 
     def __init__(self, image_set):
         imdb.__init__(self,  'CaltechPedestrians_' + image_set)
-        self.triplet = True if image_set == 'triplet' else False
+        self.triplet = True if 'triplet' in image_set.split('_') else False
         self._prefix = 'CaltechPedestrians'
-        self.image_set = 'train' if image_set == 'triplet' else image_set
-        self.num_triplet_set = 4000 if image_set == 'triplet' else 0
+        self.image_set = 'train' if 'train' in image_set.split('_') else 'test'
+        self.num_triplet_set = 5000 if self.image_set == 'train' else 2000
+        self.num_triplet_test_images = 5
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
         self.scene_per_episode_max = 5 if image_set == 'test' else 15
@@ -96,7 +96,10 @@ class CaltechPedestrians(imdb):
             print('wrote gt roidb to {}'.format(cache_file))
         finally:
             if self.triplet:
-                roidb = self.make_triplet_set(self.gather_by_id(roidb))
+                if self.image_set == 'train':
+                    roidb = self.make_triplet_set(self.gather_by_id(roidb))
+                else:
+                    roidb = self.make_triplet_test_set(self.gather_by_id(roidb))
             else:
                 roidb = self.gather_by_episode(roidb)
             print('CaltechPedestrians dataset for {} : {} images loaded'.format(self.image_set,len(roidb)))
@@ -323,7 +326,7 @@ class CaltechPedestrians(imdb):
         exist_ids = list(id_roidb.keys())
         identical_different = []
         while len(identical_different) != self.num_triplet_set:
-            call = tuple(npr.choice(exist_ids, 2, replace=False))
+            call = list(npr.choice(exist_ids, 2, replace=False))
             if call not in identical_different:
                 identical_different.append(call)
         new_index = []
@@ -338,3 +341,35 @@ class CaltechPedestrians(imdb):
         self._image_index = new_index
         return new_roidb
 
+    def make_triplet_test_set(self, roidb, shuffle=True):
+        for i in range(len(self._image_index)):
+            roidb[i]['index'] = self._image_index[i]
+
+        id_roidb = {db['ids'][0]: [] for db in roidb}
+
+        for db in roidb:
+            id_roidb[db['ids'][0]] += [db]
+        for k in list(id_roidb.keys()):
+            if len(id_roidb[k]) < 2:
+                del id_roidb[k]
+        exist_ids = list(id_roidb.keys())
+        identical_different = []
+        while len(identical_different) != self.num_triplet_set:
+            call = list(npr.choice(exist_ids, self.num_triplet_test_images-1, replace=False))
+            if call not in identical_different:
+                identical_different.append(call)
+        new_index = []
+        new_roidb = []
+        for sib in identical_different:
+            idn = random.choice(sib) if shuffle else sib[0]
+            sib.remove(idn)
+            all = []
+            all.extend(random.sample(id_roidb[idn], 2))
+            all.extend([random.sample(id_roidb[diff], 1)[0] for diff in sib])
+            random.shuffle(all)
+            new_index.extend([db['index'] for db in all])
+            new_roidb.extend([db for db in all])
+        for db in new_roidb:
+            db.pop('index', None)
+        self._image_index = new_index
+        return new_roidb

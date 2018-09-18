@@ -72,7 +72,6 @@ class RPN(nn.Module):
         features = self.features(im_data)
         batch_size = features.size(0)
         rpn_conv1 = self.conv1(features)
-
         # rpn score
         rpn_cls_score = self.score_conv(rpn_conv1)
 
@@ -82,7 +81,6 @@ class RPN(nn.Module):
 
         # rpn boxes
         rpn_bbox_pred = self.bbox_conv(rpn_conv1)
-
         # proposal layer
         cfg_key = 'TRAIN' if self.training else 'TEST'
         rois = self.proposal_layer((rpn_cls_prob.data, rpn_bbox_pred.data, im_info,
@@ -176,8 +174,8 @@ class FasterRCNN(nn.Module):
                           'motorbike', 'person', 'pottedplant',
                           'sheep', 'sofa', 'train', 'tvmonitor'])
     PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-    SCALES = (600,)
-    MAX_SIZE = 1000
+    SCALES = cfg.TRAIN.SCALES
+    MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
@@ -196,6 +194,7 @@ class FasterRCNN(nn.Module):
         self.fc7 = FC(4096, 4096)
         self.score_fc = FC(4096, self.n_classes, relu=False)
         self.bbox_fc = FC(4096, self.n_classes * 4, relu=False)
+        self.fc_sim = FC(512 * 7 * 7, 4096, relu=False)
 
         # loss
         self.cross_entropy = 0
@@ -203,6 +202,16 @@ class FasterRCNN(nn.Module):
         self.triplet_loss = 0
         # for log
         self.debug = debug
+        if cfg.TRIPLET.IS_TRUE:
+            if self.debug:
+                self.set = 0
+                self.match = 0
+            if cfg.TRIPLET.LOSS == 'euc':
+                self.loss_triplet = self.euclidean_distance_loss
+            elif cfg.TRIPLET.LOSS == 'log':
+                self.loss_triplet = self.lossless_triplet_loss
+            elif cfg.TRIPLET.LOSS == 'cls':
+                self.loss_triplet = self.cross_entropy_cosine_sim
         self.init_module = self._init_faster_rcnn_vgg16
     @property
     def loss(self):
@@ -257,9 +266,11 @@ class FasterRCNN(nn.Module):
             self.cross_entropy, self.loss_box = self.build_loss(cls_score, bbox_pred, roi_data)
             # triplet loss
             if cfg.TRIPLET.IS_TRUE:
-                triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.BG_NUM)
+                triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.MAX_BG)
                 triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
-                self.triplet_loss = self.lossless_triplet_loss(triplet_features)
+                triplet_features = triplet_features.view(triplet_features.size(0), -1)
+                triplet_features = self.fc_sim(triplet_features)
+                self.triplet_loss = self.loss_triplet(triplet_features)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -297,45 +308,86 @@ class FasterRCNN(nn.Module):
 
         return cross_entropy, loss_box
 
-    def lossless_triplet_loss(self, triplet_features, scaling_factor = None):
+    def euclidean_distance_loss(self, triplet_features):
         """
-        lossless triplet loss implementation based on
-                            https://towardsdatascience.com/lossless-triplet-loss-7e932f990b24
-        :param triplet_features:
-        anchor -- the encodings for the anchor data
-        positive -- the encodings for the positive data (similar to anchor)
-        negative -- the encodings for the negative data (different from anchor)
-        N  --  The number of dimension
-        beta -- The scaling factor, N is recommended
-        epsilon -- The Epsilon value to prevent ln(0)
+        euclidean_distance_loss
         """
+        from torch.nn.functional import normalize
+        anchor = normalize(triplet_features[0].view(-1), dim=0)
+        positive = normalize(triplet_features[1].view(-1), dim=0)
+        negative = normalize(triplet_features[2].view(-1), dim=0)
 
-        epsilon = 1e-8
-        triplet_features = torch.sigmoid(triplet_features)
-
-        anchor = triplet_features[0].view(-1)
-        positive = triplet_features[1].view(-1)
-        negative = triplet_features[2].view(-1)
-
-        N = anchor.numel()
-        beta = N if scaling_factor is None else scaling_factor
-
-        pos_dist = ((anchor - positive) ** 2)
-        neg_dist = ((anchor - negative) ** 2)
-
-        pos_dist = -torch.log(-torch.div(pos_dist, beta) + 1 + epsilon).sum(0)
-        neg_dist = -torch.log(-torch.div((N - neg_dist), beta) + 1 + epsilon).sum(0)
+        pos_dist = ((anchor - positive) ** 2).sum(0)
+        neg_dist = ((anchor - negative) ** 2).sum(0)
 
         if triplet_features.size(0) > 3:
-            rem_features = triplet_features[3:]
+            rem_features = normalize(triplet_features[3:], dim=1)
             bg_size = rem_features.size(0)
             rem_features = rem_features.view(bg_size, -1)
-            rem_dist = ((anchor - rem_features) ** 2).sum(1)
-            rem_dist = -torch.log(-torch.div((N - rem_dist), beta) + 1 + epsilon).sum(0)
+            rem_dist = ((anchor - rem_features) ** 2).sum(1).sum(0) / float(bg_size)
         else:
-            rem_dist = 0
-        loss = neg_dist + pos_dist + rem_dist
+            rem_dist = 0.
+        if self.debug:
+            self.set += 1
+            self.match += 1 if pos_dist.data[0] < neg_dist.data[0] and pos_dist.data[0] < rem_dist.data[0] else 0
+        loss = pos_dist + (1 - 0.2 * (neg_dist + rem_dist)).clamp(min=0.)
         return loss
+
+    def lossless_triplet_loss(self, triplet_features):
+        """
+        euclidean_distance_loss
+        """
+        from math import isnan
+        from torch.nn.functional import normalize
+        anchor = normalize(triplet_features[0].view(-1), dim=0)
+        positive = normalize(triplet_features[1].view(-1), dim=0)
+        negative = normalize(triplet_features[2].view(-1), dim=0)
+
+        pos_dist = 0.5 * torch.sqrt(((anchor - positive) ** 2).sum(0))
+        neg_dist = 0.5 * torch.sqrt(((anchor - negative) ** 2).sum(0))
+
+        if triplet_features.size(0) > 3:
+            rem_features = normalize(triplet_features[3:], dim=1)
+            bg_size = rem_features.size(0)
+            rem_features = rem_features.view(bg_size, -1)
+            rem_dist = 0.5 * torch.sqrt(((anchor - rem_features) ** 2).sum(1)).sum(0) / float(bg_size)
+        else:
+            rem_dist = 0.
+        if self.debug:
+            self.set += 1
+            self.match += 1 if pos_dist.data[0] < neg_dist.data[0] and pos_dist.data[0] < rem_dist.data[0] else 0
+        epsilon = 1e-12
+        loss = - torch.log(-pos_dist + 1.0 + epsilon) - torch.log(neg_dist + epsilon) - torch.log(rem_dist + epsilon)
+        loss = 0. if isnan(loss.data[0]) else loss
+        return loss
+
+    def cross_entropy_cosine_sim(self,triplet_features):
+        """
+        euclidean_distance_loss
+        """
+        from torch.nn.functional import normalize, cosine_similarity
+        anchor = normalize(triplet_features[0].view(-1), dim=0)
+        positive = normalize(triplet_features[1].view(-1), dim=0)
+        negative = normalize(triplet_features[2].view(-1), dim=0)
+        scores = Variable(torch.zeros((2, 2)).cuda())
+        scores[:, 0] = cosine_similarity(anchor, positive, dim=0)
+        scores[0, 1] = 1.0 - cosine_similarity(anchor, negative, dim=0)
+        labels = Variable(torch.zeros(2).long().cuda())
+        labels[1] = 1
+        if triplet_features.size(0) > 3:
+            rem_features = normalize(triplet_features[3:], dim=1)
+            bg_size = rem_features.size(0)
+            anchor = anchor.unsqueeze(0)
+            rem_features = rem_features.view(bg_size, -1)
+            scores[1, 1] = (1.0 - cosine_similarity(rem_features, anchor, dim=1)).sum(0) / float(bg_size)
+        else:
+            scores = scores[:1]
+            labels = labels[:1]
+        loss = F.cross_entropy(scores, labels).sum()
+        return loss
+    def reset_match_count(self):
+        self.match = 0
+        self.set = 0
 
     def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0, nms_thresh=0.3):
         scores = cls_prob.data.squeeze()
@@ -393,6 +445,38 @@ class FasterRCNN(nn.Module):
                                        min_score=thr, nms_thresh=nms_thresh)
         return pred_boxes, scores, classes
 
+    def extract_feature_vector(self, image, blob, gt_boxes, norm=False):
+        from torch.nn.functional import normalize
+        im_data, im_scales = self.get_image_blob(image)
+        im_info = np.array(
+            [[im_data.shape[1], im_data.shape[2], im_scales[0]]],
+            dtype=np.float32)
+        gt_boxes *= im_scales[0]
+        gt_boxes = np.hstack((gt_boxes, np.array([[1.]])))
+        gt_boxes = gt_boxes[np.newaxis, :]
+        im_data_pt = torch.from_numpy(im_data)
+        im_data_pt = im_data_pt.permute(0, 3, 1, 2)
+        im_info_pt = torch.from_numpy(im_info)
+        gt_boxes_pt = torch.from_numpy(gt_boxes)
+        (im_data, im_info, gt_boxes, num_boxes) = blob
+        im_data.data.resize_(im_data_pt.size()).copy_(im_data_pt)
+        im_info.data.resize_(im_info_pt.size()).copy_(im_info_pt)
+        gt_boxes.data.resize_(gt_boxes_pt.size()).copy_(gt_boxes_pt)
+        num_boxes.data.resize_(1).fill_(1)
+        assert im_data.size(0) == 1
+
+        features, rois = self.rpn(im_data, im_info.data, gt_boxes.data, num_boxes.data)
+        # rois, rois_label, _, _, _ = self.proposal_target_layer(rois, gt_boxes.data, num_boxes.data)
+        # rois_label = Variable(rois_label.view(-1).long())
+        # triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
+        #
+        # indice = torch.nonzero(rois_label.data == 1)
+        triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
+        triplet_rois[0, 1:5] = gt_boxes.data[0, 0, :4]
+        triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+        triplet_features = self.fc7(self.fc6(triplet_features.view(triplet_features.size(0), -1))).squeeze()
+        triplet_features = normalize(triplet_features, dim=0) if norm else triplet_features
+        return triplet_features
 
     def get_image_blob_noscale(self, im):
         im_orig = im.astype(np.float32, copy=True)

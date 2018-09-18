@@ -10,7 +10,7 @@ from faster_rcnn.roi_data_layer.roidb import extract_roidb
 from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
 
 _DEBUG = True
-imdb_name = 'CaltechPedestrians_triplet'
+imdb_name = 'CaltechPedestrians_test_triplet'
 imdb, roidb, ratio_list, ratio_index = extract_roidb(imdb_name)
 net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
 batch_size = 3
@@ -24,6 +24,14 @@ blob = init_data(is_cuda=True)
 iters_per_epoch = int(train_size / batch_size)
 data_iter = iter(dataloader)
 from time import sleep
+i = 0
+for db in roidb:
+    i += 1
+    print(db['ids'])
+    sleep(0.3)
+    if i == 5 :
+        i = 0
+        print('-------------------------')
 for step in range(iters_per_epoch):
     # get one batch
     data = next(data_iter)

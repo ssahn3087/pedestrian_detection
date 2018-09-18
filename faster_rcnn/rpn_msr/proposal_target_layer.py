@@ -9,8 +9,10 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from faster_rcnn.fast_rcnn.config import cfg
+from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 from faster_rcnn.fast_rcnn.bbox_transform import bbox_overlaps_batch, bbox_transform_batch
+cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
+cfg_from_file(cfg_file)
 
 
 DEBUG = False
@@ -28,6 +30,7 @@ class proposal_target_layer(nn.Module):
         self.BBOX_NORMALIZE_MEANS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
         self.BBOX_NORMALIZE_STDS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS)
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.BBOX_INSIDE_WEIGHTS)
+        self.fg_rois = 0
 
     def forward(self, all_rois, gt_boxes, num_boxes):
 
@@ -37,9 +40,12 @@ class proposal_target_layer(nn.Module):
 
         gt_boxes_append = gt_boxes.new(gt_boxes.size()).zero_()
         gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
-
+        jitter_gt_boxes = self.jitter_gt_boxes(gt_boxes_append)
+        for i in range(gt_boxes.size(0)):
+            gt_boxes_append[i, :, 0] = i
+            jitter_gt_boxes[i, :, 0] = i
         # Include ground-truth boxes in the set of candidate rois
-        all_rois = torch.cat([all_rois, gt_boxes_append], 1)
+        all_rois = torch.cat([all_rois, gt_boxes_append, jitter_gt_boxes], 1)
 
         num_images = 1
         rois_per_image = int(cfg.TRAIN.BATCH_SIZE / num_images)
@@ -112,6 +118,7 @@ class proposal_target_layer(nn.Module):
         """Generate a random sample of RoIs comprising foreground and background
         examples.
         """
+        self.fg_rois = 0
         # overlaps: (rois x gt_boxes)
 
         overlaps = bbox_overlaps_batch(all_rois, gt_boxes)
@@ -137,7 +144,7 @@ class proposal_target_layer(nn.Module):
 
             fg_inds = torch.nonzero(max_overlaps[i] >= cfg.TRAIN.FG_THRESH).view(-1)
             fg_num_rois = fg_inds.numel()
-
+            #self.fg_rois += fg_num_rois
             # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
             bg_inds = torch.nonzero((max_overlaps[i] < cfg.TRAIN.BG_THRESH_HI) &
                                     (max_overlaps[i] >= cfg.TRAIN.BG_THRESH_LO)).view(-1)
@@ -199,11 +206,33 @@ class proposal_target_layer(nn.Module):
 
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
 
+        self.fg_rois += torch.sum(labels_batch.ne(0))
+        if self.fg_rois == labels_batch.numel():
+            raise RuntimeError
         bbox_target_data = self._compute_targets_pytorch(
             rois_batch[:, :, 1:5], gt_rois_batch[:, :, :4])
 
         bbox_targets, bbox_inside_weights = \
             self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
 
-
         return labels_batch, rois_batch, bbox_targets, bbox_inside_weights
+
+    def jitter_gt_boxes(self, gt_boxes, jitter=0.15):
+        """ jitter the gtboxes, before adding them into rois, to be more robust for cls and rgs
+        gt_boxes: (G, 5) [x1 ,y1 ,x2, y2, class] int
+        """
+        jittered_boxes = gt_boxes.new(gt_boxes.size()).zero_()
+        jittered_boxes.copy_(gt_boxes)
+        for i in range(gt_boxes.size(0)):
+            for j in range(gt_boxes.size(1)):
+                if (jittered_boxes[i, j, :] == 0).all():
+                    continue
+                ws = jittered_boxes[i, j, 3] - jittered_boxes[i, j, 1] + 1.0
+                hs = jittered_boxes[i, j, 4] - jittered_boxes[i, j, 2] + 1.0
+                width_offset = np.floor((np.random.rand(2) - 0.5) * jitter * ws)
+                height_offset = np.floor((np.random.rand(2) - 0.5) * jitter * hs)
+                jittered_boxes[i, j, 1] += width_offset[0]
+                jittered_boxes[i, j, 3] += width_offset[1]
+                jittered_boxes[i, j, 2] += height_offset[0]
+                jittered_boxes[i, j, 4] += height_offset[1]
+        return jittered_boxes

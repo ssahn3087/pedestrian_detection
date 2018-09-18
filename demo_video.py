@@ -12,7 +12,7 @@ from faster_rcnn.datasets.factory import get_imdb
 global video_file
 global output_file
 global fps
-video_file = 'demo/Gang burgle 50 firearms from gun shop in 2 minutes, Houston.mp4'
+video_file = 'demo/Youtube_Pedestrians_720p.mp4'
 output_file = 'demo/output.avi'
 fps = 30
 def test():
@@ -21,7 +21,7 @@ def test():
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1_4816.h5'
+    pre_model_name = 'CaltechPedestrians_triplet_1_vgg16_0.5_b3.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
 
