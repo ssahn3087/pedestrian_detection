@@ -210,8 +210,15 @@ class FasterRCNN(nn.Module):
                 self.loss_triplet = self.euclidean_distance_loss
             elif cfg.TRIPLET.LOSS == 'log':
                 self.loss_triplet = self.lossless_triplet_loss
+                self.relu = nn.ReLU(inplace=True)
             elif cfg.TRIPLET.LOSS == 'cls':
                 self.loss_triplet = self.cross_entropy_cosine_sim
+                self.relu = nn.ReLU(inplace=True)
+                self.BCELoss = nn.BCELoss(size_average=False)
+            elif cfg.TRIPLET.LOSS == 'sia':
+                self.loss_triplet = self.siamese_network
+                self.relu = nn.ReLU(inplace=True)
+                self.L1param = nn.Linear(4096, 4096)
         self.init_module = self._init_faster_rcnn_vgg16
     @property
     def loss(self):
@@ -269,8 +276,10 @@ class FasterRCNN(nn.Module):
                 triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.MAX_BG)
                 triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
                 triplet_features = triplet_features.view(triplet_features.size(0), -1)
+                triplet_features = self.relu(triplet_features) if cfg.TRIPLET.LOSS == 'sia' else triplet_features
                 triplet_features = self.fc_sim(triplet_features)
                 self.triplet_loss = self.loss_triplet(triplet_features)
+
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -330,7 +339,7 @@ class FasterRCNN(nn.Module):
         if self.debug:
             self.set += 1
             self.match += 1 if pos_dist.data[0] < neg_dist.data[0] and pos_dist.data[0] < rem_dist.data[0] else 0
-        loss = pos_dist + (1 - 0.2 * (neg_dist + rem_dist)).clamp(min=0.)
+        loss = pos_dist + (2 - (neg_dist + rem_dist)).clamp(min=0.)
         return loss
 
     def lossless_triplet_loss(self, triplet_features):
@@ -339,9 +348,11 @@ class FasterRCNN(nn.Module):
         """
         from math import isnan
         from torch.nn.functional import normalize
-        anchor = normalize(triplet_features[0].view(-1), dim=0)
-        positive = normalize(triplet_features[1].view(-1), dim=0)
-        negative = normalize(triplet_features[2].view(-1), dim=0)
+        triplet_features = normalize(self.relu(triplet_features), dim=1)
+        anchor = triplet_features[0].view(-1)
+        positive = triplet_features[1].view(-1)
+        negative = triplet_features[2].view(-1)
+        scores = Variable(torch.zeros(3).cuda())
 
         pos_dist = 0.5 * torch.sqrt(((anchor - positive) ** 2).sum(0))
         neg_dist = 0.5 * torch.sqrt(((anchor - negative) ** 2).sum(0))
@@ -366,25 +377,36 @@ class FasterRCNN(nn.Module):
         euclidean_distance_loss
         """
         from torch.nn.functional import normalize, cosine_similarity
-        anchor = normalize(triplet_features[0].view(-1), dim=0)
-        positive = normalize(triplet_features[1].view(-1), dim=0)
-        negative = normalize(triplet_features[2].view(-1), dim=0)
-        scores = Variable(torch.zeros((2, 2)).cuda())
-        scores[:, 0].data.copy_(cosine_similarity(anchor, positive, dim=0))
-        scores[0, 1] = 1.0 - cosine_similarity(anchor, negative, dim=0)
-        labels = Variable(torch.zeros(2).long().cuda())
-        labels[1] = 1
+        match = True
+        triplet_features = normalize(self.relu(triplet_features), dim=1)
+        anchor = triplet_features[0].view(-1)
+        positive = triplet_features[1].view(-1)
+        negative = triplet_features[2].view(-1)
+        scores = Variable(torch.zeros(3).cuda())
+        scores[0] = cosine_similarity(anchor, positive, dim=0)
+        scores[1] = cosine_similarity(anchor, negative, dim=0)
+        labels = Variable(torch.zeros(3).cuda())
+        labels[0] = 1.0
+        match *= scores[0].data[0] > scores[1].data[0]
         if triplet_features.size(0) > 3:
             rem_features = normalize(triplet_features[3:], dim=1)
             bg_size = rem_features.size(0)
             anchor = anchor.unsqueeze(0)
             rem_features = rem_features.view(bg_size, -1)
-            scores[1, 1] = (1.0 - cosine_similarity(rem_features, anchor, dim=1)).sum(0) / float(bg_size)
+            scores[2] = cosine_similarity(rem_features, anchor, dim=1).sum(0) / float(bg_size)
+            match *= scores[0].data[0] > scores[2].data[0]
         else:
-            scores = scores[:1]
-            labels = labels[:1]
-        loss = F.cross_entropy(scores, labels).sum()
+            scores = scores[:2]
+            labels = labels[:2]
+        if self.debug:
+            self.set += 1
+            self.match += 1 if match else 0
+        loss = self.BCELoss(scores, labels) / scores.numel()
         return loss
+
+    def siamese_network(self, triplet_features):
+        return None
+
     def reset_match_count(self):
         self.match = 0
         self.set = 0
@@ -422,7 +444,6 @@ class FasterRCNN(nn.Module):
         inds = inds.cpu().numpy()
 
         return pred_boxes, scores, self.classes[inds]
-
 
     def detect(self, image, blob, thr=0.3, nms_thresh=0.3):
         im_data, im_scales = self.get_image_blob(image)
@@ -466,11 +487,7 @@ class FasterRCNN(nn.Module):
         assert im_data.size(0) == 1
 
         features, rois = self.rpn(im_data, im_info.data, gt_boxes.data, num_boxes.data)
-        # rois, rois_label, _, _, _ = self.proposal_target_layer(rois, gt_boxes.data, num_boxes.data)
-        # rois_label = Variable(rois_label.view(-1).long())
-        # triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
-        #
-        # indice = torch.nonzero(rois_label.data == 1)
+
         triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
         triplet_rois[0, 1:5] = gt_boxes.data[0, 0, :4]
         triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
@@ -488,7 +505,6 @@ class FasterRCNN(nn.Module):
         blob = im_list_to_blob(processed_ims)
 
         return blob, np.array(im_scale_factors)
-
 
     def get_image_blob(self, im):
         """Converts an image into a network input.

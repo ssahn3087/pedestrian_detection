@@ -54,9 +54,9 @@ pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
-end_epoch = 100
-lr_decay_step = 5
-lr_decay = 1./10
+end_epoch = 10
+lr_decay_step = 3
+lr_decay = 0.8
 rand_seed = 1024
 
 
@@ -126,7 +126,8 @@ if use_tensorboard:
     if remove_all_log:
         cc.remove_all_experiments()
     if exp_name is None:
-        exp_name = datetime.now().strftime('vgg16_%m-%d_%H-%M')
+        name = '{}_{}'.format(imdb_name, model_name)
+        exp_name = datetime.now().strftime(name+'_%m-%d_%H-%M')
         exp = cc.create_experiment(exp_name)
     else:
         exp = cc.open_experiment(exp_name)
@@ -147,7 +148,7 @@ for epoch in range(start_epoch, end_epoch+1):
     pf, tot = 0., 0
     tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
     net.train()
-    if epoch % lr_decay_step == 0:
+    if epoch > 1 and (epoch-1) % lr_decay_step == 0:
         lr *= lr_decay
         params = train_net_params(net, cfg, lr)
         optimizer = torch.optim.SGD(params, momentum=momentum)
@@ -199,21 +200,23 @@ for epoch in range(start_epoch, end_epoch+1):
                         (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt, net.match/net.set*100))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
                         net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
-                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(),triplet_loss)
+                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), triplet_loss)
                     )
             re_cnt = True
-
         if use_tensorboard and cnt % log_interval == 0:
             exp.add_scalar_value('train_loss', train_loss / step_cnt, step=cnt)
             exp.add_scalar_value('learning_rate', lr, step=cnt)
             if _DEBUG:
+                triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
                 exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)
                 exp.add_scalar_value('true_negative', tf/bg*100., step=cnt)
                 losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()[0]),
                           'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()[0]),
                           'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()[0]),
-                          'rcnn_box': float(net.loss_box.data.cpu().numpy()[0])}
+                          'rcnn_box': float(net.loss_box.data.cpu().numpy()[0]),
+                          'sim_loss': float(triplet_loss)}
                 exp.add_scalar_dict(losses, step=cnt)
+
         if re_cnt:
             train_loss = 0
             tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0

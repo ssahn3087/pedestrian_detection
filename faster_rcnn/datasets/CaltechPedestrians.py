@@ -18,11 +18,11 @@ class CaltechPedestrians(imdb):
         self.triplet = True if 'triplet' in image_set.split('_') else False
         self._prefix = 'CaltechPedestrians'
         self.image_set = 'train' if 'train' in image_set.split('_') else 'test'
-        self.num_triplet_set = 5000 if self.image_set == 'train' else 2000
+        self.num_triplet_set = 8000 if self.image_set == 'train' else 2000
         self.num_triplet_test_images = 5
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 5 if image_set == 'test' else 15
+        self.scene_per_episode_max = 15 if image_set == 'train' else 5
         self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -72,8 +72,6 @@ class CaltechPedestrians(imdb):
 
         This function loads/saves from/to a cache file to speed up future calls.
         """
-        if (self.area_thresh is not None) or (self.area_thresh != 0):
-            print("Area Threshold exists for CaltechPedestrians dataset as {}".format(self.area_thresh))
 
         if self.image_set == 'train':
             cache_file = os.path.join(self.cache_path, self._prefix + '_train_gt_roidb.pkl')
@@ -90,39 +88,65 @@ class CaltechPedestrians(imdb):
             print(str(e))
             roidb = [self._load_pedestrian_annotation(index)
                         for index in self._image_index_default]
-            roidb = self.remove_none(roidb)
+            roidb = self.update_image_index_file(roidb)
             with open(cache_file, 'wb') as fid:
                 pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
             print('wrote gt roidb to {}'.format(cache_file))
         finally:
             if self.triplet:
                 if self.image_set == 'train':
-                    roidb = self.make_triplet_set(self.gather_by_id(roidb))
+                    cache_file = os.path.join(self.cache_path, self._prefix + '_triplet_train_gt_roidb.pkl')
                 else:
-                    roidb = self.make_triplet_test_set(self.gather_by_id(roidb))
+                    cache_file = os.path.join(self.cache_path, self._prefix + '_triplet_test_gt_roidb.pkl')
+                try:
+                    if os.path.getsize(cache_file) > 0:
+                        with open(cache_file, 'rb') as fid:
+                            roidb = pickle.load(fid)
+                    self._image_index = self.update_image_index(triplet=self.triplet)
+                    print('{} gt roidb loaded from {}'.format(self.name, cache_file))
+                except FileNotFoundError as e:
+                    print(str(e))
+                    if self.image_set == 'train':
+                        roidb = self.make_triplet_set(self.gather_by_id(roidb))
+                    else:
+                        roidb = self.make_triplet_test_set(self.gather_by_id(roidb))
+                    with open(cache_file, 'wb') as fid:
+                        pickle.dump(roidb, fid, pickle.HIGHEST_PROTOCOL)
+                    self.update_image_index_file(roidb, triplet=self.triplet)
+                    print('wrote gt roidb to {}'.format(cache_file))
             else:
                 roidb = self.gather_by_episode(roidb)
             print('CaltechPedestrians dataset for {} : {} images loaded'.format(self.image_set,len(roidb)))
             return roidb
 
-    def update_image_index(self):
-        image_set_file = os.path.join(self.cache_path, self.image_set + ".txt")
-        f = open(image_set_file, 'r')
+    def update_image_index(self, triplet=False):
+        if triplet:
+            image_index_file = os.path.join(self.cache_path, self.image_set + "_triplet.txt")
+        else:
+            image_index_file = os.path.join(self.cache_path, self.image_set + ".txt")
+        f = open(image_index_file, 'r')
         lines = f.readlines()
         image_index = [line.strip() for line in lines]
         f.close()
         return image_index
 
-    def remove_none(self, gt_roidb):
-        roidb = [db for db in gt_roidb if db is not None]
-        image_index =[]
-        image_set_file = os.path.join(self.cache_path, self.image_set + ".txt")
-        with open(image_set_file, 'w') as f:
-            for i, db in enumerate(gt_roidb):
-                if db is not None:
-                    image_index.append(self._image_index_default[i])
-                    f.write(self._image_index_default[i]+'\n')
-        self._image_index = image_index
+    def update_image_index_file(self, gt_roidb, triplet=False):
+        if triplet:
+            image_index_file = os.path.join(self.cache_path, self.image_set + "_triplet.txt")
+            with open(image_index_file, 'w') as f:
+                for i in range(len(self._image_index)):
+                    f.write(self._image_index[i] + '\n')
+            roidb = gt_roidb
+        else:
+            roidb = [db for db in gt_roidb if db is not None]
+            image_index =[]
+            image_index_file = os.path.join(self.cache_path, self.image_set + ".txt")
+            with open(image_index_file, 'w') as f:
+                for i, db in enumerate(gt_roidb):
+                    if db is not None:
+                        image_index.append(self._image_index_default[i])
+                        f.write(self._image_index_default[i]+'\n')
+            self._image_index = image_index
 
         assert len(self._image_index) == len(roidb), \
             'fatal error: the length of _image_index must be same with roidb'
@@ -228,6 +252,10 @@ class CaltechPedestrians(imdb):
         occl = int(obj['occl'])
         area = float(pos[2] * pos[3])
         # take label == 'person' / areas > 200.0
+        if self.image_set == 'test':
+            occl = 0
+            self.area_thresh = 0
+
         if label != 'person' or area < self.area_thresh or occl == 1:
             return False
         elif (pos[3:] <= 10).any() or pos.size < 4:
@@ -317,18 +345,29 @@ class CaltechPedestrians(imdb):
             roidb[i]['index'] = self._image_index[i]
 
         id_roidb = {db['ids'][0]: [] for db in roidb}
-
         for db in roidb:
             id_roidb[db['ids'][0]] += [db]
         for k in list(id_roidb.keys()):
             if len(id_roidb[k]) < 2:
                 del id_roidb[k]
+
         exist_ids = list(id_roidb.keys())
+        exist_ids.sort()
         identical_different = []
-        while len(identical_different) != self.num_triplet_set:
-            call = list(npr.choice(exist_ids, 2, replace=False))
-            if call not in identical_different:
-                identical_different.append(call)
+        far = 1
+        while far > 0:
+            for i in range(len(exist_ids) - far):
+                if len(identical_different) < self.num_triplet_set:
+                    identical_different.append([exist_ids[i], exist_ids[i + far]])
+                else:
+                    far = -1
+                    break
+            far += 1
+
+            # call = random.sample(exist_ids, 2)
+            # if call not in identical_different:
+            #     identical_different.append(call)
+        random.shuffle(identical_different)
         new_index = []
         new_roidb = []
         for twin in identical_different:
@@ -353,11 +392,18 @@ class CaltechPedestrians(imdb):
             if len(id_roidb[k]) < 2:
                 del id_roidb[k]
         exist_ids = list(id_roidb.keys())
+        exist_ids.sort()
         identical_different = []
-        while len(identical_different) != self.num_triplet_set:
-            call = list(npr.choice(exist_ids, self.num_triplet_test_images-1, replace=False))
+        for t in range(len(exist_ids) - self.num_triplet_test_images + 2):
+            call = []
+            for i in range(self.num_triplet_test_images-1):
+                call.append(exist_ids[t+i])
+            identical_different.append(call)
+        while len(identical_different) < self.num_triplet_set:
+            call = random.sample(exist_ids, self.num_triplet_test_images-1)
             if call not in identical_different:
                 identical_different.append(call)
+        random.shuffle(identical_different)
         new_index = []
         new_roidb = []
         for sib in identical_different:
