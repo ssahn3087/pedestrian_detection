@@ -18,8 +18,8 @@ class CaltechPedestrians(imdb):
         self.triplet = True if 'triplet' in image_set.split('_') else False
         self._prefix = 'CaltechPedestrians'
         self.image_set = 'train' if 'train' in image_set.split('_') else 'test'
-        self.num_triplet_set = 8000 if self.image_set == 'train' else 2000
-        self.num_triplet_test_images = 5
+        self.num_triplet_set = 8000 if self.image_set == 'train' else 4000
+        self.num_triplet_test_images = 3
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
         self.scene_per_episode_max = 15 if image_set == 'train' else 5
@@ -400,7 +400,7 @@ class CaltechPedestrians(imdb):
                 call.append(exist_ids[t+i])
             identical_different.append(call)
         while len(identical_different) < self.num_triplet_set:
-            call = random.sample(exist_ids, self.num_triplet_test_images-1)
+            call = random.sample(exist_ids, self.num_triplet_test_images - 1)
             if call not in identical_different:
                 identical_different.append(call)
         random.shuffle(identical_different)

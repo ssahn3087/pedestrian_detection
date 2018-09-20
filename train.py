@@ -61,9 +61,9 @@ rand_seed = 1024
 
 
 _DEBUG = True
-use_tensorboard = False
-remove_all_log = False   # remove all historical experiments in TensorBoard
-exp_name = None # the previous experiment name in TensorBoard
+use_tensorboard = True
+remove_all_log = False  # remove all historical experiments in TensorBoard
+exp_name = None  # the previous experiment name in TensorBoard
 
 # ------------
 
@@ -122,6 +122,7 @@ make_dir(output_dir)
 # tensorboad
 use_tensorboard = use_tensorboard and CrayonClient is not None
 if use_tensorboard:
+    print('TENSORBOARD IS ON')
     cc = CrayonClient(hostname='127.0.0.1')
     if remove_all_log:
         cc.remove_all_experiments()
@@ -147,6 +148,7 @@ t.tic()
 for epoch in range(start_epoch, end_epoch+1):
     pf, tot = 0., 0
     tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
+    rpn_cls, rpn_box, rcnn_cls, rcnn_box, sim_loss = 0., 0., 0., 0., 0.
     net.train()
     if epoch > 1 and (epoch-1) % lr_decay_step == 0:
         lr *= lr_decay
@@ -171,6 +173,11 @@ for epoch in range(start_epoch, end_epoch+1):
             bg += net.bg_cnt
             tp_box += float(net.rpn.tp)
             fg_box += net.rpn.fg_box
+            rpn_box += net.rpn.cross_entropy.data.cpu().numpy()[0]
+            rpn_cls += net.rpn.loss_box.data.cpu().numpy()[0]
+            rcnn_box += net.loss_box.data.cpu().numpy()[0]
+            rcnn_cls += net.cross_entropy.data.cpu().numpy()[0]
+            sim_loss += net.triplet_loss.data.cpu().numpy()[0] if cfg.TRIPLET.IS_TRUE else 0.
         train_loss += loss.data[0]
         step_cnt += 1
         cnt += 1
@@ -195,12 +202,11 @@ for epoch in range(start_epoch, end_epoch+1):
                 else:
                     tot += 1
                     pf += tp/fg*100
-                    triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
+
                     log_print('\tEP: %.2f%%, TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d), TD: %.2f%%' %
                         (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt, net.match/net.set*100))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
-                        net.rpn.cross_entropy.data.cpu().numpy(), net.rpn.loss_box.data.cpu().numpy(),
-                        net.cross_entropy.data.cpu().numpy(), net.loss_box.data.cpu().numpy(), triplet_loss)
+                        rpn_cls/step_cnt, rpn_box/step_cnt, rcnn_cls/step_cnt, rcnn_box/step_cnt, sim_loss/step_cnt )
                     )
             re_cnt = True
         if use_tensorboard and cnt % log_interval == 0:
@@ -210,16 +216,18 @@ for epoch in range(start_epoch, end_epoch+1):
                 triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
                 exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)
                 exp.add_scalar_value('true_negative', tf/bg*100., step=cnt)
-                losses = {'rpn_cls': float(net.rpn.cross_entropy.data.cpu().numpy()[0]),
-                          'rpn_box': float(net.rpn.loss_box.data.cpu().numpy()[0]),
-                          'rcnn_cls': float(net.cross_entropy.data.cpu().numpy()[0]),
-                          'rcnn_box': float(net.loss_box.data.cpu().numpy()[0]),
-                          'sim_loss': float(triplet_loss)}
+                exp.add_scalar_value('true_distance', net.match/net.set*100., step=cnt)
+                losses = {'rpn_cls': float(rpn_cls/step_cnt),
+                          'rpn_box': float(rpn_box/step_cnt),
+                          'rcnn_cls': float(rcnn_cls/step_cnt),
+                          'rcnn_box': float(rcnn_box/step_cnt),
+                          'sim_loss': float(sim_loss/step_cnt)}
                 exp.add_scalar_dict(losses, step=cnt)
 
         if re_cnt:
             train_loss = 0
             tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
+            rpn_cls, rpn_box, rcnn_cls, rcnn_box, sim_loss = 0., 0., 0., 0., 0.
             net.reset_match_count()
             step_cnt = 0
             t.tic()

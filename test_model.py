@@ -62,9 +62,18 @@ def id_match_test(model, detector, imdb, roidb, type='euc'):
     def cos_sim(f1, f2):
         val = 1.0 - cosine_similarity(f1, f2, dim=0).data.cpu().numpy()
         return val
+    def l1_dist(detector, f1, f2):
+        val = 1.0 - torch.sigmoid(detector.L1param(torch.abs(f1-f2)))
+        return val
     detector.cuda()
     detector.eval()
-    val_func = dist if type =='euc' or type == 'log' else cos_sim
+    if type == 'euc' or type == 'log':
+        val_func = dist
+    elif type == 'cls':
+        val_func = cos_sim
+    elif type == 'sia':
+        val_func = l1_dist
+
     print('Test ID Match with ', model.split('/')[-1])
 
     match = 0
@@ -78,11 +87,12 @@ def id_match_test(model, detector, imdb, roidb, type='euc'):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
             gt_boxes = roidb[i]['boxes'].astype(np.float32)
-            features.append(detector.extract_feature_vector(image, blob, gt_boxes, norm=True))
+            sia = True if type == 'sia' else False
+            features.append(detector.extract_feature_vector(image, blob, gt_boxes, sia=sia))
         init_val = 1e15
         for m in range(batch_size):
             for n in range(m+1, batch_size):
-                val = val_func(features[m], features[n])
+                val = val_func(features[m], features[n]) if not sia else val_func(detector, features[m], features[n])
                 if val < init_val:
                     init_val = val
                     min_m, min_n = m, n
@@ -118,5 +128,6 @@ if __name__ == '__main__':
         network.load_net(model, detector)
         match = id_match_test(model, detector, imdb, roidb, type=cfg.TRIPLET.LOSS) if cfg.TRIPLET.IS_TRUE else 0.
         precision = test(model, detector, imdb, roidb)
+        del detector
         f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
     f.close()
