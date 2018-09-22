@@ -124,6 +124,7 @@ use_tensorboard = use_tensorboard and CrayonClient is not None
 if use_tensorboard:
     print('TENSORBOARD IS ON')
     cc = CrayonClient(hostname='127.0.0.1')
+    cc.remove_experiment('CaltechPedestrians_train_triplet_vgg16_log_09-22_09-29')
     if remove_all_log:
         cc.remove_all_experiments()
     if exp_name is None:

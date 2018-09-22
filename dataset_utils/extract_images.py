@@ -65,7 +65,6 @@ for dname in sorted(glob.glob(input_dir+'/set*')):
 				i += 1
 			print(fn)
 	elif set_name in test_set:
-		cnt = 1
 		out_dir = os.path.join(os.getcwd(), 'extracted/images', 'test')
 		make_dir(out_dir)
 		dir_each_set = os.path.join(out_dir,set_name)
@@ -93,7 +92,7 @@ for dname in sorted(glob.glob(input_dir+'/set*')):
 						arg = dir_each_seq.split('/')
 						f2.write(set_name+"/"+video_name+"/"+str(i)+"/"+str(cnt)+"\n")
 						cnt = cnt + 1
-				i = i + 1	
+				i += 1
 			print(fn)
 f1.close()
 f2.close()

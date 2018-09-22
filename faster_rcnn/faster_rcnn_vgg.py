@@ -203,7 +203,7 @@ class FasterRCNN(nn.Module):
         # for log
         self.debug = debug
         if cfg.TRIPLET.IS_TRUE:
-            pos_weight = torch.ones(2)
+            pos_weight = torch.ones(3)
             pos_weight[0] = 2.0
             if self.debug:
                 self.set = 0
@@ -212,13 +212,13 @@ class FasterRCNN(nn.Module):
                 self.loss_triplet = self.euclidean_distance_loss
             elif cfg.TRIPLET.LOSS == 'log':
                 self.loss_triplet = self.cross_entropy_l2_dist
-                self.BCELoss = nn.BCEWithLogitsLoss(size_average=False, pos_weight=pos_weight)
+                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
             elif cfg.TRIPLET.LOSS == 'cls':
                 self.loss_triplet = self.cross_entropy_cosine_sim
-                self.BCELoss = nn.BCEWithLogitsLoss(size_average=False, pos_weight=pos_weight)
+                self.BCELoss = nn.BCEWithLogitsLoss(weight=pos_weight, size_average=False)
             elif cfg.TRIPLET.LOSS == 'sia':
                 self.loss_triplet = self.siamese_network
-                self.BCELoss = nn.BCELoss(size_average=False, pos_weight=pos_weight)
+                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
                 self.relu = nn.ReLU(inplace=True)
                 self.L1param = nn.Linear(4096, 4096)
                 self.L1param.weight.data.normal_(1.0, 0.01)
@@ -350,6 +350,7 @@ class FasterRCNN(nn.Module):
         Binary Cross Entropy with l2 distance measurement
         """
         from torch.nn.functional import normalize
+        from math import isnan
         match = True
         triplet_features = normalize(triplet_features, dim=1)
         anchor = triplet_features[0].view(-1)
@@ -376,13 +377,15 @@ class FasterRCNN(nn.Module):
             self.set += 1
             self.match += 1 if match else 0
         loss = self.BCELoss(scores, labels) / scores.numel()
+        loss = 0. if isnan(loss) else loss
         return loss
 
     def cross_entropy_cosine_sim(self, triplet_features):
         """
-        Binary Cross Entropy with cosine similarity measurement
+        Binary Cross Entropy (sigmoid included) with cosine similarity measurement
         """
         from torch.nn.functional import normalize, cosine_similarity
+        from math import isnan
         match = True
         triplet_features = normalize(triplet_features, dim=1)
         anchor = triplet_features[0].view(-1)
@@ -410,6 +413,7 @@ class FasterRCNN(nn.Module):
             self.set += 1
             self.match += 1 if match else 0
         loss = self.BCELoss(scores, labels) / scores.numel()
+        loss = 0. if isnan(loss) else loss
         return loss
 
     def siamese_network(self, triplet_features):
