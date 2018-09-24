@@ -377,7 +377,6 @@ class FasterRCNN(nn.Module):
             self.set += 1
             self.match += 1 if match else 0
         loss = self.BCELoss(scores, labels) / scores.numel()
-        loss = 0. if isnan(loss) else loss
         return loss
 
     def cross_entropy_cosine_sim(self, triplet_features):
@@ -413,7 +412,6 @@ class FasterRCNN(nn.Module):
             self.set += 1
             self.match += 1 if match else 0
         loss = self.BCELoss(scores, labels) / scores.numel()
-        loss = 0. if isnan(loss) else loss
         return loss
 
     def siamese_network(self, triplet_features):

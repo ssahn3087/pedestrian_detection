@@ -124,7 +124,7 @@ use_tensorboard = use_tensorboard and CrayonClient is not None
 if use_tensorboard:
     print('TENSORBOARD IS ON')
     cc = CrayonClient(hostname='127.0.0.1')
-    cc.remove_experiment('CaltechPedestrians_train_triplet_vgg16_log_09-22_09-29')
+    #cc.remove_experiment('CaltechPedestrians_train_triplet_vgg16_log_09-23_12-23')
     if remove_all_log:
         cc.remove_all_experiments()
     if exp_name is None:
@@ -145,7 +145,7 @@ re_cnt = False
 
 t = Timer()
 t.tic()
-
+from math import isnan
 for epoch in range(start_epoch, end_epoch+1):
     pf, tot = 0., 0
     tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
@@ -166,7 +166,6 @@ for epoch in range(start_epoch, end_epoch+1):
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
 
-        loss = net.rpn.loss + net.loss
         if _DEBUG:
             tp += float(net.tp)
             tf += float(net.tf)
@@ -179,6 +178,10 @@ for epoch in range(start_epoch, end_epoch+1):
             rcnn_box += net.loss_box.data.cpu().numpy()[0]
             rcnn_cls += net.cross_entropy.data.cpu().numpy()[0]
             sim_loss += net.triplet_loss.data.cpu().numpy()[0] if cfg.TRIPLET.IS_TRUE else 0.
+        loss = net.rpn.loss + net.loss
+        if isnan(loss):
+            print(gt_boxes)
+            print(net.rpn.loss, net.loss)
         train_loss += loss.data[0]
         step_cnt += 1
         cnt += 1
