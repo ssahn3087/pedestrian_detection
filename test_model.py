@@ -54,7 +54,7 @@ def test(model, detector, imdb, roidb):
     return tp/fg*100
 
 
-def id_match_test(model, detector, imdb, roidb, type='euc'):
+def id_match_test(model, detector, imdb, roidb):
     from torch.nn.functional import cosine_similarity
     def dist(f1, f2):
         val = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
@@ -62,17 +62,16 @@ def id_match_test(model, detector, imdb, roidb, type='euc'):
     def cos_sim(f1, f2):
         val = 1.0 - cosine_similarity(f1, f2, dim=0).data.cpu().numpy()
         return val
-    def l1_dist(detector, f1, f2):
-        val = 1.0 - torch.sigmoid(detector.L1param(torch.abs(f1-f2)))
-        return val
+
     detector.cuda()
     detector.eval()
-    if type == 'euc' or type == 'log':
+    name_blocks = model.split('_')
+    if 'euc' in name_blocks or 'log' in name_blocks:
         val_func = dist
-    elif type == 'cls':
+    elif 'cls' in name_blocks:
         val_func = cos_sim
-    elif type == 'sia':
-        val_func = l1_dist
+    else:
+        val_func = dist
 
     print('Test ID Match with ', model.split('/')[-1])
 
@@ -87,12 +86,12 @@ def id_match_test(model, detector, imdb, roidb, type='euc'):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
             gt_boxes = roidb[i]['boxes'].astype(np.float32)
-            sia = True if type == 'sia' else False
-            features.append(detector.extract_feature_vector(image, blob, gt_boxes, sia=sia))
+            relu = True if 'relu' in name_blocks else False
+            features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
         init_val = 1e15
         for m in range(batch_size):
             for n in range(m+1, batch_size):
-                val = val_func(features[m], features[n]) if not sia else val_func(detector, features[m], features[n])
+                val = val_func(features[m], features[n])
                 if val < init_val:
                     init_val = val
                     min_m, min_n = m, n
@@ -126,7 +125,7 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
-        match = id_match_test(model, detector, imdb, roidb, type=cfg.TRIPLET.LOSS) if cfg.TRIPLET.IS_TRUE else 0.
+        match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
         precision = test(model, detector, imdb, roidb)
         del detector
         f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))

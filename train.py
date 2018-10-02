@@ -53,7 +53,7 @@ pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
-start_epoch = 1
+start_epoch = 2
 end_epoch = 10
 lr_decay_step = 3
 lr_decay = 0.8
@@ -124,7 +124,7 @@ use_tensorboard = use_tensorboard and CrayonClient is not None
 if use_tensorboard:
     print('TENSORBOARD IS ON')
     cc = CrayonClient(hostname='127.0.0.1')
-    #cc.remove_experiment('CaltechPedestrians_train_triplet_vgg16_log_09-23_12-23')
+
     if remove_all_log:
         cc.remove_all_experiments()
     if exp_name is None:
@@ -206,9 +206,9 @@ for epoch in range(start_epoch, end_epoch+1):
                 else:
                     tot += 1
                     pf += tp/fg*100
-
+                    match_rate = net.match/net.set * 100. if cfg.TRIPLET.IS_TRUE else 0.
                     log_print('\tEP: %.2f%%, TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d), TD: %.2f%%' %
-                        (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt, net.match/net.set*100))
+                        (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt, match_rate))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
                         rpn_cls/step_cnt, rpn_box/step_cnt, rcnn_cls/step_cnt, rcnn_box/step_cnt, sim_loss/step_cnt )
                     )
@@ -217,10 +217,11 @@ for epoch in range(start_epoch, end_epoch+1):
             exp.add_scalar_value('train_loss', train_loss / step_cnt, step=cnt)
             exp.add_scalar_value('learning_rate', lr, step=cnt)
             if _DEBUG:
+                match_rate = net.match / net.set * 100. if cfg.TRIPLET.IS_TRUE else 0.
                 triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
                 exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)
                 exp.add_scalar_value('true_negative', tf/bg*100., step=cnt)
-                exp.add_scalar_value('true_distance', net.match/net.set*100., step=cnt)
+                exp.add_scalar_value('true_distance', match_rate, step=cnt)
                 losses = {'rpn_cls': float(rpn_cls/step_cnt),
                           'rpn_box': float(rpn_box/step_cnt),
                           'rcnn_cls': float(rcnn_cls/step_cnt),

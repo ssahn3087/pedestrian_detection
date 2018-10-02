@@ -212,16 +212,12 @@ class FasterRCNN(nn.Module):
                 self.loss_triplet = self.euclidean_distance_loss
             elif cfg.TRIPLET.LOSS == 'log':
                 self.loss_triplet = self.cross_entropy_l2_dist
+                self.relu = nn.ReLU(inplace=True)
                 self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
             elif cfg.TRIPLET.LOSS == 'cls':
                 self.loss_triplet = self.cross_entropy_cosine_sim
-                self.BCELoss = nn.BCEWithLogitsLoss(weight=pos_weight, size_average=False)
-            elif cfg.TRIPLET.LOSS == 'sia':
-                self.loss_triplet = self.siamese_network
-                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
                 self.relu = nn.ReLU(inplace=True)
-                self.L1param = nn.Linear(4096, 4096)
-                self.L1param.weight.data.normal_(1.0, 0.01)
+                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
         self.init_module = self._init_faster_rcnn_vgg16
     @property
     def loss(self):
@@ -279,7 +275,6 @@ class FasterRCNN(nn.Module):
                 triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.MAX_BG)
                 triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
                 triplet_features = triplet_features.view(triplet_features.size(0), -1)
-                triplet_features = self.relu(triplet_features) if cfg.TRIPLET.LOSS == 'sia' else triplet_features
                 triplet_features = self.fc_sim(triplet_features)
                 self.triplet_loss = self.loss_triplet(triplet_features)
 
@@ -352,6 +347,7 @@ class FasterRCNN(nn.Module):
         from torch.nn.functional import normalize
         from math import isnan
         match = True
+        triplet_features = self.relu(triplet_features)
         triplet_features = normalize(triplet_features, dim=1)
         anchor = triplet_features[0].view(-1)
         positive = triplet_features[1].view(-1)
@@ -386,6 +382,7 @@ class FasterRCNN(nn.Module):
         from torch.nn.functional import normalize, cosine_similarity
         from math import isnan
         match = True
+        triplet_features = self.relu(triplet_features)
         triplet_features = normalize(triplet_features, dim=1)
         anchor = triplet_features[0].view(-1)
         positive = triplet_features[1].view(-1)
@@ -441,7 +438,7 @@ class FasterRCNN(nn.Module):
         loss = self.BCELoss(scores, labels) / scores.numel()
         return loss
 
-    def extract_feature_vector(self, image, blob, gt_boxes, sia=False):
+    def extract_feature_vector(self, image, blob, gt_boxes, relu=False):
         from torch.nn.functional import normalize
         im_data, im_scales = self.get_image_blob(image)
         im_info = np.array(
@@ -466,9 +463,9 @@ class FasterRCNN(nn.Module):
         triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
         triplet_rois[0, 1:5] = gt_boxes.data[0, 0, :4]
         triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
-        triplet_features = self.relu(features) if sia else triplet_features
         triplet_features = self.fc7(self.fc6(triplet_features.view(triplet_features.size(0), -1))).squeeze()
-        triplet_features = normalize(triplet_features, dim=0) if not sia else triplet_features
+        triplet_features = self.relu(triplet_features) if relu else triplet_features
+        triplet_features = normalize(triplet_features, dim=0)
         return triplet_features
 
     def reset_match_count(self):

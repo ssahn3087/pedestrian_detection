@@ -8,7 +8,7 @@ POOLING_MODE : align
 TRIPLET:
   IS_TRUE : True
   MAX_BG : 3
-  LOSS: log
+  LOSS: cls
 RESNET:
   IS_TRUE : False
   FIXED_BLOCKS : 1

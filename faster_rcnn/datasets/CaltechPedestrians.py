@@ -18,7 +18,7 @@ class CaltechPedestrians(imdb):
         self.triplet = True if 'triplet' in image_set.split('_') else False
         self._prefix = 'CaltechPedestrians'
         self.image_set = 'train' if 'train' in image_set.split('_') else 'test'
-        self.num_triplet_set = 8000 if self.image_set == 'train' else 4000
+        self.num_triplet_set = 8000 if self.image_set == 'train' else 10000
         self.num_triplet_test_images = 3
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
