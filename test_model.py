@@ -85,7 +85,7 @@ def id_match_test(model, detector, imdb, roidb):
         for k in range(batch_size):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
-            gt_boxes = roidb[i]['boxes'].astype(np.float32)
+            gt_boxes = roidb[pt]['boxes'].astype(np.float32)
             relu = True if 'relu' in name_blocks else False
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
         init_val = 1e15
