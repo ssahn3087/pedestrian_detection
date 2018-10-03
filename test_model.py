@@ -85,7 +85,7 @@ def id_match_test(model, detector, imdb, roidb):
         for k in range(batch_size):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
-            gt_boxes = roidb[i]['boxes'].astype(np.float32)
+            gt_boxes = roidb[pt]['boxes'].astype(np.float32)
             relu = True if 'relu' in name_blocks else False
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
         init_val = 1e15
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     # ------------
     imdb_name = 'CaltechPedestrians_test_triplet'
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-    model_dir = 'data/test_phase/'
+    model_dir = 'models/saved_model3/vgg16_log'
     models = os.listdir(model_dir)
     pretrained_model = [os.path.join(model_dir, model) for model in models]
     pretrained_model.sort()
@@ -115,9 +115,9 @@ if __name__ == '__main__':
     imdb = get_imdb(imdb_name)
     prepare_roidb(imdb)
     roidb = imdb.roidb
-    f = open(os.path.join(model_dir, 'precision.txt'), 'a')
 
     for model in pretrained_model:
+        f = open(os.path.join(model_dir, 'precision.txt'), 'a')
         if model.endswith('txt'):
             continue
         if not is_resnet:
@@ -129,4 +129,4 @@ if __name__ == '__main__':
         precision = test(model, detector, imdb, roidb)
         del detector
         f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
-    f.close()
+        f.close()
