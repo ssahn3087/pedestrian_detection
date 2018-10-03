@@ -62,7 +62,7 @@ for i in range(test_num):
 
 print('{:3.2f}s feature extraction finished !'.format(t.toc(average=False)))
 features = np.asarray(features, dtype=np.float32)
-model = TSNE(learning_rate=5)
+model = TSNE(learning_rate=10)
 labels = np.array(ids) % 4
 fig, ax = plt.subplots()
 font = {'family': 'serif',
