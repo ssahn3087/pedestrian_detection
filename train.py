@@ -53,7 +53,8 @@ pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
-start_epoch = 2
+start_epoch = 1
+
 end_epoch = 10
 lr_decay_step = 3
 lr_decay = 0.8
@@ -61,7 +62,7 @@ rand_seed = 1024
 
 
 _DEBUG = True
-use_tensorboard = True
+use_tensorboard = False
 remove_all_log = False  # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 

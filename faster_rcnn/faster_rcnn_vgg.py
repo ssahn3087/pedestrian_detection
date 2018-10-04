@@ -411,33 +411,6 @@ class FasterRCNN(nn.Module):
         loss = self.BCELoss(scores, labels) / scores.numel()
         return loss
 
-    def siamese_network(self, triplet_features):
-        match = True
-        anchor = triplet_features[0].view(-1)
-        positive = triplet_features[1].view(-1)
-        negative = triplet_features[2].view(-1)
-        scores = Variable(torch.zeros(3).cuda())
-        scores[0] = torch.sigmoid(self.L1param(torch.abs(anchor - positive)).sum())
-        scores[0] = torch.sigmoid(self.L1param(torch.abs(anchor - negative)).sum())
-        labels = Variable(torch.zeros(3).cuda())
-        labels[0] = 1.0
-        match *= scores[0].data[0] > scores[1].data[0]
-        if triplet_features.size(0) > 3:
-            rem_features = triplet_features[3:]
-            bg_size = rem_features.size(0)
-            anchor = anchor.unsqueeze(0)
-            rem_features = rem_features.view(bg_size, -1)
-            scores[2] = torch.sigmoid(self.L1param(torch.abs(rem_features - anchor)).sum(1).sum(0) / float(bg_size))
-            match *= scores[0].data[0] > scores[2].data[0]
-        else:
-            scores = scores[:2]
-            labels = labels[:2]
-        if self.debug:
-            self.set += 1
-            self.match += 1 if match else 0
-        loss = self.BCELoss(scores, labels) / scores.numel()
-        return loss
-
     def extract_feature_vector(self, image, blob, gt_boxes, relu=False):
         from torch.nn.functional import normalize
         im_data, im_scales = self.get_image_blob(image)
