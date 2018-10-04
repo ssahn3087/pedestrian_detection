@@ -72,7 +72,7 @@ def id_match_test(model, detector, imdb, roidb):
         val_func = cos_sim
     else:
         val_func = dist
-
+    relu = True if 'relu' in name_blocks else False
     print('Test ID Match with ', model.split('/')[-1])
 
     match = 0
@@ -86,7 +86,7 @@ def id_match_test(model, detector, imdb, roidb):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
             gt_boxes = roidb[pt]['boxes'].astype(np.float32)
-            relu = True if 'relu' in name_blocks else False
+
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
         init_val = 1e15
         for m in range(batch_size):
@@ -104,8 +104,8 @@ def id_match_test(model, detector, imdb, roidb):
 def score_analysis(model, detector, imdb, roidb):
     from torch.nn.functional import cosine_similarity
     def dist(f1, f2):
-        val = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
-        return val
+        score = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
+        return score
 
     detector.cuda()
     detector.eval()
@@ -128,7 +128,7 @@ def score_analysis(model, detector, imdb, roidb):
             gt_boxes = roidb[pt]['boxes'].astype(np.float32)
             relu = True if 'relu' in name_blocks else False
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
-            bg_features.append(detector.extract_background_features(image, blob, gt_boxes, relu=relu).data.cpu().numpy())
+            bg_features.append(detector.extract_background_features(image, blob, gt_boxes, relu=relu))
 
         for m in range(batch_size):
             for n in range(m+1, batch_size):
@@ -142,7 +142,7 @@ def score_analysis(model, detector, imdb, roidb):
                         .format(i * batch_size, pos_score / i, neg_score / 2*i, bg_score / 2*i))
     pos_score /= num_set
     neg_score /= 2*num_set
-    bg_score /= 2*bg_score
+    bg_score /= 2*num_set
     return pos_score, neg_score, bg_score
 
 
