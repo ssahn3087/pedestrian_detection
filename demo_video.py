@@ -31,6 +31,7 @@ def test():
         detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
     else:
         detector = FasterRCNN_VGG(classes=imdb.classes, debug=False)
+
     network.load_net(pretrained_model, detector)
     detector.cuda()
     detector.eval()

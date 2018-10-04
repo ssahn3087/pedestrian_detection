@@ -57,7 +57,7 @@ def test(model, detector, imdb, roidb):
 def id_match_test(model, detector, imdb, roidb):
     from torch.nn.functional import cosine_similarity
     def dist(f1, f2):
-        val = 0.5 * torch.sqrt(((f1 - f2) ** 2).sum(0)).data.cpu().numpy()
+        val = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
         return val
     def cos_sim(f1, f2):
         val = 1.0 - cosine_similarity(f1, f2, dim=0).data.cpu().numpy()
@@ -72,7 +72,7 @@ def id_match_test(model, detector, imdb, roidb):
         val_func = cos_sim
     else:
         val_func = dist
-
+    relu = True if 'relu' in name_blocks else False
     print('Test ID Match with ', model.split('/')[-1])
 
     match = 0
@@ -86,7 +86,7 @@ def id_match_test(model, detector, imdb, roidb):
             pt = batch_size * i + k
             image = cv2.imread(roidb[pt]['image'])
             gt_boxes = roidb[pt]['boxes'].astype(np.float32)
-            relu = True if 'relu' in name_blocks else False
+
             features.append(detector.extract_feature_vector(image, blob, gt_boxes, relu=relu))
         init_val = 1e15
         for m in range(batch_size):
@@ -104,7 +104,7 @@ def id_match_test(model, detector, imdb, roidb):
 def score_analysis(model, detector, imdb, roidb):
     from torch.nn.functional import cosine_similarity
     def dist(f1, f2):
-        score = 0.5 * torch.sqrt(((f1 - f2) ** 2).sum(0)).data.cpu().numpy()[0]
+        score = (torch.sqrt((f1 - f2) ** 2)).sum(0).data.cpu().numpy()
         return score
 
     detector.cuda()
@@ -139,7 +139,7 @@ def score_analysis(model, detector, imdb, roidb):
                     bg_score += dist(features[m], bg_features[n])
         if (i + 1) % 500 == 0 and i > 0: print(
                     '------------{:d}  pos: {:.4f} neg: {:.4f} bg: {:.4f}'\
-                        .format(i * batch_size, pos_score / i, neg_score / (2*i), bg_score / (2*i)))
+                        .format(i * batch_size, pos_score / i, neg_score / 2*i, bg_score / 2*i))
     pos_score /= num_set
     neg_score /= 2*num_set
     bg_score /= 2*num_set
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     # ------------
     imdb_name = 'CaltechPedestrians_test_triplet'
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-    model_dir = 'models/saved_model3/vgg16_euc'
+    model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)
     pretrained_model = [os.path.join(model_dir, model) for model in models]
     pretrained_model.sort()
@@ -161,9 +161,9 @@ if __name__ == '__main__':
     imdb = get_imdb(imdb_name)
     prepare_roidb(imdb)
     roidb = imdb.roidb
+    f = open(os.path.join(model_dir, 'precision.txt'), 'a')
 
     for model in pretrained_model:
-        f = open(os.path.join(model_dir, 'precision.txt'), 'a')
         if model.endswith('txt'):
             continue
         if not is_resnet:
@@ -171,10 +171,10 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
-        match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
+        # match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
         # precision = test(model, detector, imdb, roidb)
-        # pos, neg, bg = score_analysis(model, detector, imdb, roidb)
+        pos, neg, bg = score_analysis(model, detector, imdb, roidb)
         del detector
-        #f.write(model+'  -----pos: {:.4f} neg: {:.4f} bg: {:.4f}\n'.format(pos, neg, bg))
-        f.write(model+'  ----{:.2f}%\n'.format(match))
-        f.close()
+        f.write(model+'  -----pos: {:.4f} neg: {:.4f} bg: {:.4f}\n'.format(pos, neg, bg))
+        # f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
+    f.close()
