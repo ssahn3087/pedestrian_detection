@@ -468,6 +468,31 @@ class FasterRCNN(nn.Module):
         triplet_features = normalize(triplet_features, dim=0)
         return triplet_features
 
+    def extract_background_features(self, image, blob, gt_boxes, relu=False):
+        from torch.nn.functional import normalize
+        from faster_rcnn.utils.cython_bbox import bbox_overlaps
+        (im_data, im_info, gt_boxes, num_boxes) = blob
+        assert im_data.size(0) == 1
+
+        features, rois = self.rpn(im_data, im_info.data, gt_boxes.data, num_boxes.data)
+
+        # dets : N x 4, gt_boxes : 1 x 4
+        # overlaps : N x 1 overlaps score
+        dets = rois.cpu().numpy()[0, :, 1:5]
+        overlaps = bbox_overlaps(np.ascontiguousarray(dets, dtype=np.float)\
+                , np.ascontiguousarray(gt_boxes.data.cpu().numpy()[0, :, :4], dtype=np.float))
+        # max : K max overlaps score about N dets
+        overlaps = np.multiply(overlaps, overlaps < cfg.TEST.RPN_NMS_THRESH)
+        max_arg = overlaps.argmax(axis=0)[0]
+
+        triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
+        triplet_rois[0, 1:5] = rois[0, max_arg, 1:5]
+        triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+        triplet_features = self.fc7(self.fc6(triplet_features.view(triplet_features.size(0), -1))).squeeze()
+        triplet_features = self.relu(triplet_features) if relu else triplet_features
+        triplet_features = normalize(triplet_features, dim=0)
+        return triplet_features
+
     def reset_match_count(self):
         self.match = 0
         self.set = 0
