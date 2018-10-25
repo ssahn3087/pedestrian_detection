@@ -11,17 +11,18 @@ from faster_rcnn.datasets.factory import get_imdb
 
 def test():
     import os
-    img_file = 'demo/test.jpeg'
+    img_file = 'demo/images.jpeg'
     image = cv2.imread(img_file)
 
-    imdb_name = 'CaltechPedestrians_train'
-    # imdb_name = 'coco_2017_train'
-    # imdb_name = 'voc_2007_trainval'
+    #imdb_name = 'CaltechPedestrians_train'
+    imdb_name = 'coco_2017_train'
+    #imdb_name = 'voc_2007_trainval'
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    #pre_model_name = 'coco_2017_train_10_vgg16_0.7_b1.h5'
-    pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1.h5'
+    #pre_model_name = 'VGGnet_fast_rcnn_iter_70000.h5'
+    pre_model_name = 'coco_2017_train_10_vgg16_0.7_b1.h5'
+    #pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
     print(imdb.classes)
@@ -41,6 +42,7 @@ def test():
 
     t = Timer()
     t.tic()
+
     dets, scores, classes = detector.detect(image, blob, thr=0.7, nms_thresh=0.3)
     runtime = t.toc()
     print('total spend: {}s'.format(runtime))
@@ -51,6 +53,7 @@ def test():
         cv2.rectangle(im2show, det[0:2], det[2:4], (255, 205, 51), 2)
         cv2.putText(im2show, '%s: %.3f' % (classes[i], scores[i]), (det[0], det[1] + 15),\
                     cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), thickness=1)
+
     cv2.imwrite(os.path.join('demo', 'out.jpg'), im2show)
     cv2.imshow('demo', im2show)
     cv2.waitKey(0)

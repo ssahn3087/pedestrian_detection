@@ -13,9 +13,11 @@ from faster_rcnn.rpn_msr.anchor_target_layer import anchor_target_layer as ancho
 from faster_rcnn.rpn_msr.proposal_target_layer import proposal_target_layer as proposal_target_layer_py
 from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
+import faster_rcnn.triplet as tpl
 from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
+from faster_rcnn.network import get_triplet_rois
 from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.resnet import RESNET
@@ -186,16 +188,33 @@ class FasterRCNN(nn.Module):
             self.roi_pool = RoIAlign(7, 7, 1.0/16)
         elif cfg.POOLING_MODE == 'pool':
             self.roi_pool = RoIPool(7, 7, 1.0/16)
-        self.fc_layer = self.resnet.fc_layer
+        self.post_fc = self.resnet.PostFC_layer
         self.score_fc = FC(2048, self.n_classes, relu=False)
         self.bbox_fc = FC(2048, self.n_classes * 4, relu=False)
+        self.fc_sim = FC(512 * 7 * 7, 2048, relu=False)
 
         # loss
         self.cross_entropy = 0
         self.loss_box = 0
-
+        self.triplet_loss = 0
         # for log
         self.debug = debug
+        if cfg.TRIPLET.IS_TRUE:
+            pos_weight = torch.ones(3)
+            pos_weight[0] = 2.0
+            if self.debug:
+                self.set = 0
+                self.match = 0
+            if cfg.TRIPLET.LOSS == 'euc':
+                self.loss_triplet = self.euclidean_distance_loss
+            elif cfg.TRIPLET.LOSS == 'log':
+                self.loss_triplet = self.cross_entropy_l2_dist
+                self.relu = nn.ReLU(inplace=True)
+                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
+            elif cfg.TRIPLET.LOSS == 'cls':
+                self.loss_triplet = self.cross_entropy_cosine_sim
+                self.relu = nn.ReLU(inplace=True)
+                self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
         self.init_module = self._init_faster_rcnn_resnet
     @property
     def loss(self):
@@ -224,18 +243,18 @@ class FasterRCNN(nn.Module):
 
         rois = Variable(rois)
 
-
         # roi pool
-        pooled_features = self.roi_pool(features, rois.view(-1,5))
-        x = self.fc_layer(pooled_features).mean(3).mean(2)
-        x = F.dropout(x, training=self.training)
+        pooled_features = self.roi_pool(features, rois.view(-1, 5))
+        x = self.post_fc(pooled_features).mean(3).mean(2)
 
+        x = F.dropout(x, training=self.training)
         cls_score = self.score_fc(x)
         cls_prob = F.softmax(cls_score, dim=1)
         bbox_pred = self.bbox_fc(x)
 
         self.cross_entropy = 0
         self.loss_box = 0
+        self.triplet_loss = 0
 
         if self.training:
             # select the corresponding columns according to roi labels
@@ -244,6 +263,13 @@ class FasterRCNN(nn.Module):
                                             rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
             bbox_pred = bbox_pred_select.squeeze(1)
             self.cross_entropy, self.loss_box = self.build_loss(cls_score, bbox_pred, roi_data)
+            # triplet loss
+            if cfg.TRIPLET.IS_TRUE:
+                triplet_rois = get_triplet_rois(rois, rois_label, cfg.TRIPLET.MAX_BG)
+                triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+                triplet_features = triplet_features.view(triplet_features.size(0), -1)
+                triplet_features = self.fc_sim(triplet_features)
+                self.triplet_loss = self.loss_triplet(self, triplet_features)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -275,13 +301,72 @@ class FasterRCNN(nn.Module):
         if bg_cnt > 0:
             ce_weights[0] = float(fg_cnt) / bg_cnt
         ce_weights = ce_weights.cuda()
+        # cross_entropy = F.cross_entropy(cls_score, rois_label).mean()
         cross_entropy = F.cross_entropy(cls_score, rois_label, weight=ce_weights).mean()
-
         loss_box = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws).mean()
 
         return cross_entropy, loss_box
 
-    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0 ,nms_thresh=0.3):
+    def extract_feature_vector(self, image, blob, gt_boxes, relu=False):
+        from torch.nn.functional import normalize
+        im_data, im_scales = self.get_image_blob(image)
+        im_info = np.array(
+            [[im_data.shape[1], im_data.shape[2], im_scales[0]]],
+            dtype=np.float32)
+        gt_boxes *= im_scales[0]
+        gt_boxes = np.hstack((gt_boxes, np.array([[1.]])))
+        gt_boxes = gt_boxes[np.newaxis, :]
+        im_data_pt = torch.from_numpy(im_data)
+        im_data_pt = im_data_pt.permute(0, 3, 1, 2)
+        im_info_pt = torch.from_numpy(im_info)
+        gt_boxes_pt = torch.from_numpy(gt_boxes)
+        (im_data, im_info, gt_boxes, num_boxes) = blob
+        im_data.data.resize_(im_data_pt.size()).copy_(im_data_pt)
+        im_info.data.resize_(im_info_pt.size()).copy_(im_info_pt)
+        gt_boxes.data.resize_(gt_boxes_pt.size()).copy_(gt_boxes_pt)
+        num_boxes.data.resize_(1).fill_(1)
+        assert im_data.size(0) == 1
+
+        features, rois = self.rpn(im_data, im_info.data, gt_boxes.data, num_boxes.data)
+
+        triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
+        triplet_rois[0, 1:5] = gt_boxes.data[0, 0, :4]
+        triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+        triplet_features = self.fc7(self.fc6(triplet_features.view(triplet_features.size(0), -1))).squeeze()
+        triplet_features = self.relu(triplet_features) if relu else triplet_features
+        triplet_features = normalize(triplet_features, dim=0)
+        return triplet_features
+
+    def extract_background_features(self, image, blob, gt_boxes, relu=False):
+        from torch.nn.functional import normalize
+        from faster_rcnn.utils.cython_bbox import bbox_overlaps
+        (im_data, im_info, gt_boxes, num_boxes) = blob
+        assert im_data.size(0) == 1
+
+        features, rois = self.rpn(im_data, im_info.data, gt_boxes.data, num_boxes.data)
+
+        # dets : N x 4, gt_boxes : 1 x 4
+        # overlaps : N x 1 overlaps score
+        dets = rois.cpu().numpy()[0, :, 1:5]
+        overlaps = bbox_overlaps(np.ascontiguousarray(dets, dtype=np.float)\
+                , np.ascontiguousarray(gt_boxes.data.cpu().numpy()[0, :, :4], dtype=np.float))
+        # max : K max overlaps score about N dets
+        overlaps = np.multiply(overlaps, overlaps < cfg.TEST.RPN_NMS_THRESH)
+        max_arg = overlaps.argmax(axis=0)[0]
+
+        triplet_rois = Variable(torch.zeros(1, rois.size(2))).cuda()
+        triplet_rois[0, 1:5] = rois[0, max_arg, 1:5]
+        triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
+        triplet_features = self.fc7(self.fc6(triplet_features.view(triplet_features.size(0), -1))).squeeze()
+        triplet_features = self.relu(triplet_features) if relu else triplet_features
+        triplet_features = normalize(triplet_features, dim=0)
+        return triplet_features
+
+    def reset_match_count(self):
+        self.match = 0
+        self.set = 0
+
+    def interpret_faster_rcnn(self, cls_prob, bbox_pred, rois, im_info, nms=True, min_score=0.0, nms_thresh=0.3):
         scores = cls_prob.data.squeeze()
         # find class
         scores, inds = scores.max(1)
@@ -295,10 +380,10 @@ class FasterRCNN(nn.Module):
         if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # Optionally normalize targets by a precomputed mean and stdev
             box_deltas = box_deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                             + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+                         + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
 
         box_deltas = box_deltas.view(-1, 4 * self.n_classes)
-        box_deltas = torch.cat([box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)]\
+        box_deltas = torch.cat([box_deltas[i, (inds[i] * 4): (inds[i] * 4 + 4)] \
                                 for i in range(len(inds))], 0)
         box_deltas = box_deltas.view(-1, 4)
         boxes, box_deltas = boxes.unsqueeze(0), box_deltas.unsqueeze(0)
@@ -312,6 +397,7 @@ class FasterRCNN(nn.Module):
         pred_boxes = pred_boxes.cpu().numpy()
         scores = scores.cpu().numpy()
         inds = inds.cpu().numpy()
+
         return pred_boxes, scores, self.classes[inds]
 
     def detect(self, image, blob, thr=0.3, nms_thresh=0.3):
@@ -331,8 +417,8 @@ class FasterRCNN(nn.Module):
 
         cls_prob, bbox_pred, rois = self(im_data, im_info, gt_boxes, num_boxes)
         pred_boxes, scores, classes = \
-            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape,\
-                                       min_score=thr, nms_thresh= nms_thresh)
+            self.interpret_faster_rcnn(cls_prob, bbox_pred, rois, im_info, image.shape, \
+                                       min_score=thr, nms_thresh=nms_thresh)
         return pred_boxes, scores, classes
 
     def get_image_blob_noscale(self, im):

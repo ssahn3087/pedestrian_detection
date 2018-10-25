@@ -38,12 +38,10 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 # hyper-parameters
 # ------------
 
-#imdb_name = 'voc_2007_trainval'
-imdb_name = 'CaltechPedestrians_train_triplet'
-test_name = 'CaltechPedestrians_test_triplet'
-# imdb_name = 'coco_2017_train'
-# test_name = 'coco_2017_val'
-
+imdb_name = 'coco_2017_train'
+test_name = 'coco_2017_val'
+#imdb_name = 'CaltechPedestrians_train_triplet'
+#test_name = 'CaltechPedestrians_test_triplet'
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
@@ -62,8 +60,8 @@ rand_seed = 1024
 
 
 _DEBUG = True
-use_tensorboard = False
-remove_all_log = False  # remove all historical experiments in TensorBoard
+use_tensorboard = True
+remove_all_log = False # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 
 # ------------
@@ -104,7 +102,7 @@ else:
     net.init_module()
 if cfg.TRIPLET.IS_TRUE:
     model_name += '_' + cfg.TRIPLET.LOSS
-network.load_net(pretrained_model, net)
+#network.load_net(pretrained_model, net)
 #network.load_net_pedestrians(pretrained_model, net, 1)
 
 blob = init_data(is_cuda=True)
@@ -246,7 +244,7 @@ for epoch in range(start_epoch, end_epoch+1):
                              .format(imdb_name, epoch, model_name, fg_thresh, batch_size))
     network.save_net(save_name, net)
     print('save model: {}'.format(save_name))
-    if pf/tot > 80:
+    if pf/tot > 70:
         print('Entering Test Phase ...')
         f = open('precision.txt', 'a')
         precision = test(save_name, net, test_imdb, test_roidb)

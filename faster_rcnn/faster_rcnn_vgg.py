@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+import faster_rcnn.triplet as tpl
 from faster_rcnn.utils.blob import im_list_to_blob
 from faster_rcnn.nms.nms_wrapper import nms
 from faster_rcnn.rpn_msr.proposal_layer import proposal_layer as proposal_layer_py
@@ -16,7 +17,6 @@ from faster_rcnn.network import weights_normal_init
 from faster_rcnn.network import _smooth_l1_loss
 from faster_rcnn.network import Conv2d, FC
 from faster_rcnn.network import get_triplet_rois
-# from roi_pooling.modules.roi_pool_py import RoIPool
 from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.vgg16 import VGG16
@@ -209,13 +209,13 @@ class FasterRCNN(nn.Module):
                 self.set = 0
                 self.match = 0
             if cfg.TRIPLET.LOSS == 'euc':
-                self.loss_triplet = self.euclidean_distance_loss
+                self.loss_triplet = tpl.euclidean_distance_loss
             elif cfg.TRIPLET.LOSS == 'log':
-                self.loss_triplet = self.cross_entropy_l2_dist
+                self.loss_triplet = tpl.cross_entropy_l2_dist
                 self.relu = nn.ReLU(inplace=True)
                 self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
             elif cfg.TRIPLET.LOSS == 'cls':
-                self.loss_triplet = self.cross_entropy_cosine_sim
+                self.loss_triplet = tpl.cross_entropy_cosine_sim
                 self.relu = nn.ReLU(inplace=True)
                 self.BCELoss = nn.BCELoss(weight=pos_weight, size_average=False)
         self.init_module = self._init_faster_rcnn_vgg16
@@ -249,7 +249,7 @@ class FasterRCNN(nn.Module):
         # roi pool
         pooled_features = self.roi_pool(features, rois.view(-1, 5))
 
-        x = pooled_features.view(pooled_features.size()[0], -1)
+        x = pooled_features.view(pooled_features.size(0), -1)
         x = self.fc6(x)
         x = F.dropout(x, training=self.training)
         x = self.fc7(x)
@@ -276,8 +276,7 @@ class FasterRCNN(nn.Module):
                 triplet_features = self.roi_pool(features, triplet_rois.view(-1, 5))
                 triplet_features = triplet_features.view(triplet_features.size(0), -1)
                 triplet_features = self.fc_sim(triplet_features)
-                self.triplet_loss = self.loss_triplet(triplet_features)
-
+                self.triplet_loss = self.loss_triplet(self, triplet_features)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
@@ -315,101 +314,6 @@ class FasterRCNN(nn.Module):
 
         return cross_entropy, loss_box
 
-    def euclidean_distance_loss(self, triplet_features):
-        """
-        euclidean_distance_loss
-        """
-        from torch.nn.functional import normalize
-        anchor = normalize(triplet_features[0].view(-1), dim=0)
-        positive = normalize(triplet_features[1].view(-1), dim=0)
-        negative = normalize(triplet_features[2].view(-1), dim=0)
-
-        pos_dist = ((anchor - positive) ** 2).sum(0)
-        neg_dist = ((anchor - negative) ** 2).sum(0)
-
-        if triplet_features.size(0) > 3:
-            rem_features = normalize(triplet_features[3:], dim=1)
-            bg_size = rem_features.size(0)
-            rem_features = rem_features.view(bg_size, -1)
-            rem_dist = ((anchor - rem_features) ** 2).sum(1).sum(0) / float(bg_size)
-        else:
-            rem_dist = 0.
-        if self.debug:
-            self.set += 1
-            self.match += 1 if pos_dist.data[0] < neg_dist.data[0] and pos_dist.data[0] < rem_dist.data[0] else 0
-        loss = pos_dist + (1.5 - 0.2*(neg_dist + rem_dist)).clamp(min=0.)
-        return loss
-
-    def cross_entropy_l2_dist(self, triplet_features):
-        """
-        Binary Cross Entropy with l2 distance measurement
-        """
-        from torch.nn.functional import normalize
-        from math import isnan
-        match = True
-        triplet_features = self.relu(triplet_features)
-        triplet_features = normalize(triplet_features, dim=1)
-        anchor = triplet_features[0].view(-1)
-        positive = triplet_features[1].view(-1)
-        negative = triplet_features[2].view(-1)
-
-        scores = Variable(torch.zeros(3).cuda())
-        scores[0] = 0.5 * torch.sqrt(((anchor - positive) ** 2).sum(0))
-        scores[1] = 0.5 * torch.sqrt(((anchor - negative) ** 2).sum(0))
-        labels = Variable(torch.ones(3).cuda())
-        labels[0] = 0.
-        match *= scores[0].data[0] < scores[1].data[0]
-
-        if triplet_features.size(0) > 3:
-            rem_features = normalize(triplet_features[3:], dim=1)
-            bg_size = rem_features.size(0)
-            rem_features = rem_features.view(bg_size, -1)
-            scores[2] = 0.5 * torch.sqrt(((anchor - rem_features) ** 2).sum(1)).sum(0) / float(bg_size)
-            match *= scores[0].data[0] < scores[2].data[0]
-        else:
-            scores = scores[:2]
-            labels = labels[:2]
-        if self.debug:
-            self.set += 1
-            self.match += 1 if match else 0
-        loss = self.BCELoss(scores, labels) / scores.numel()
-        return loss
-
-    def cross_entropy_cosine_sim(self, triplet_features):
-        """
-        Binary Cross Entropy (sigmoid included) with cosine similarity measurement
-        """
-        from torch.nn.functional import normalize, cosine_similarity
-        from math import isnan
-        match = True
-        triplet_features = self.relu(triplet_features)
-        triplet_features = normalize(triplet_features, dim=1)
-        anchor = triplet_features[0].view(-1)
-        positive = triplet_features[1].view(-1)
-        negative = triplet_features[2].view(-1)
-
-        scores = Variable(torch.zeros(3).cuda())
-        scores[0] = cosine_similarity(anchor, positive, dim=0)
-        scores[1] = cosine_similarity(anchor, negative, dim=0)
-        labels = Variable(torch.zeros(3).cuda())
-        labels[0] = 1.0
-        match *= scores[0].data[0] > scores[1].data[0]
-
-        if triplet_features.size(0) > 3:
-            rem_features = normalize(triplet_features[3:], dim=1)
-            bg_size = rem_features.size(0)
-            anchor = anchor.unsqueeze(0)
-            rem_features = rem_features.view(bg_size, -1)
-            scores[2] = cosine_similarity(rem_features, anchor, dim=1).sum(0) / float(bg_size)
-            match *= scores[0].data[0] > scores[2].data[0]
-        else:
-            scores = scores[:2]
-            labels = labels[:2]
-        if self.debug:
-            self.set += 1
-            self.match += 1 if match else 0
-        loss = self.BCELoss(scores, labels) / scores.numel()
-        return loss
 
     def extract_feature_vector(self, image, blob, gt_boxes, relu=False):
         from torch.nn.functional import normalize
@@ -570,7 +474,6 @@ class FasterRCNN(nn.Module):
 
         return blob, np.array(im_scale_factors)
 
-
     def load_pretrained_vgg16(self, fname):
         import os
         assert os.path.exists(fname), \
@@ -606,7 +509,6 @@ class FasterRCNN(nn.Module):
             key = '{}.bias'.format(k)
             param = torch.from_numpy(params[v]['biases'])
             frcnn_dict[key].copy_(param)
-
 
     def _init_faster_rcnn_vgg16(self):
         weights_normal_init(self)

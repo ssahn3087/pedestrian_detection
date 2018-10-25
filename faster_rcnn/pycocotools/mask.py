@@ -18,7 +18,7 @@ from . import _mask
 # *boundaries* in M (or for an image the number of boundaries in the y
 # direction). Assuming fairly simple shapes, the RLE representation is
 # O(sqrt(n)) where n is number of pixels in the object. Hence space usage
-# is substantially lower, especially for large simple objects (large n).
+# is substantially lower, especially for large simple objects (large n).s
 #
 # Many common operations on masks can be computed directly using the RLE
 # (without need for decoding). This includes computations such as area,

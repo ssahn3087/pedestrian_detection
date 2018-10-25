@@ -171,10 +171,10 @@ if __name__ == '__main__':
         else:
             detector = FasterRCNN_RES(classes=imdb.classes, debug=False)
         network.load_net(model, detector)
-        # match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
-        # precision = test(model, detector, imdb, roidb)
-        pos, neg, bg = score_analysis(model, detector, imdb, roidb)
+        match = id_match_test(model, detector, imdb, roidb) if cfg.TRIPLET.IS_TRUE else 0.
+        precision = test(model, detector, imdb, roidb)
+        # pos, neg, bg = score_analysis(model, detector, imdb, roidb)
         del detector
-        f.write(model+'  -----pos: {:.4f} neg: {:.4f} bg: {:.4f}\n'.format(pos, neg, bg))
-        # f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
+        # f.write(model+'  -----pos: {:.4f} neg: {:.4f} bg: {:.4f}\n'.format(pos, neg, bg))
+        f.write(model+'  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
     f.close()

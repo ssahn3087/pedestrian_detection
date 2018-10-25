@@ -162,7 +162,6 @@ class ResNet(nn.Module):
     return x
 
 
-
 def resnet50():
     """Constructs a ResNet-50 model.
     Args:
@@ -171,6 +170,7 @@ def resnet50():
     model = ResNet(Bottleneck, [3, 4, 6, 3])
     return model
 
+
 def resnet101():
     """Constructs a ResNet-101 model.
     Args:
@@ -178,6 +178,7 @@ def resnet101():
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3])
     return model
+
 
 class RESNET(nn.Module):
     def __init__(self, res_model):
@@ -194,7 +195,7 @@ class RESNET(nn.Module):
         self.features = nn.Sequential(self.resnet.conv1, self.resnet.bn1, self.resnet.relu,
                                       self.resnet.maxpool, self.resnet.layer1,
                                       self.resnet.layer2, self.resnet.layer3)
-        self.fc_layer = nn.Sequential(self.resnet.layer4)
+        self.PostFC_layer = nn.Sequential(self.resnet.layer4)
         self.load_pretrained_resnet = self._load_resnet
 
     def forward(self, im_data):
@@ -228,7 +229,7 @@ class RESNET(nn.Module):
                 for p in m.parameters(): p.requires_grad=False
 
         self.features.apply(set_bn_fix)
-        self.fc_layer.apply(set_bn_fix)
+        self.PostFC_layer.apply(set_bn_fix)
 
     def train(self, mode=True):
         # Override train so that the training mode is set as we want
@@ -244,4 +245,4 @@ class RESNET(nn.Module):
                 if classname.find('BatchNorm') != -1:
                     m.eval()
             self.features.apply(set_bn_eval)
-            self.fc_layer.apply(set_bn_eval)
+            self.PostFC_layer.apply(set_bn_eval)
