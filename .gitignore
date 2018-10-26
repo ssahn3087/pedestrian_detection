@@ -6,6 +6,7 @@ __pycache__/
 *$py.class
 debug.py
 debug2.py
+loadjson.py
 
 # C extensions
 *.so
