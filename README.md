@@ -1,18 +1,11 @@
-The entire project is based on https://github.com/longcw/faster_rcnn_pytorch
+The entire project is based on https://github.com/longcw/faster_rcnn_pytorch and https://github.com/jwyang/faster-rcnn.pytorch
 
-data directory has two link datasets
+Tested on 
+PASCAL VOC 2007, COCO 2017, Caltech Pedestrian Detection Benchmark.
 
-VOCdevkit2007, CaltechPedestrians
-
-ln -s ~/CaltechPedestrians/extracted  ~/faster_rcnn/data/CaltechPedestrians
-
-ln -s ~/VOCdevkit  ~/faster_rcnn/data/VOCdevkit2007
-
-
-
-
-
-Use pretrained model 'VGGnet_fast_rcnn_iter_70000.h5' to train CaltechPedestrians dataset
+Mainly pretrain multi-class detection model and initialize model that detects only pedestrians.
+I add triplet loss training impressed by Triplet-based Deep Similarity Learning for Person Re-Identification, ICCV Workshops 2017
+paper : https://arxiv.org/abs/1802.03254
 
 This code is built for individual study to detect Pedestrian dataset.
 Still need much work.
