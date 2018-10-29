@@ -94,7 +94,7 @@ def extract_roidb(imdb_names, training=True):
 
     def get_training_roidb(imdb, imdb_name):
         """Returns a roidb (Region of Interest database) for use in training."""
-        if cfg.TRAIN.USE_FLIPPED and imdb_name.endswith('train'):
+        if cfg.TRAIN.USE_FLIPPED and 'train' in imdb_name:
             print('Appending horizontally-flipped training examples...')
             imdb.roidb
             imdb.append_flipped_images()

@@ -6,7 +6,7 @@ from torch.autograd import Variable
 from datetime import datetime
 from faster_rcnn import network
 from faster_rcnn.network import init_data, data_to_variable
-from faster_rcnn.network import train_net_params
+from faster_rcnn.network import train_net_params, print_weight_grad
 from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
 from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
@@ -37,9 +37,10 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-
-imdb_name = 'coco_2017_train'
-test_name = 'coco_2017_val'
+imdb_name = 'voc_2007_trainval'
+test_name = 'voc_2007_val'
+# imdb_name = 'coco_2017_train'
+# test_name = 'coco_2017_val'
 #imdb_name = 'CaltechPedestrians_train_triplet'
 #test_name = 'CaltechPedestrians_test_triplet'
 
@@ -54,14 +55,14 @@ pretrained_model = model_dir + pre_model_name
 start_epoch = 1
 
 end_epoch = 10
-lr_decay_step = 3
-lr_decay = 0.8
+lr_decay_step = 5
+lr_decay = 0.5
 rand_seed = 1024
 
 
 _DEBUG = True
-use_tensorboard = True
-remove_all_log = False # remove all historical experiments in TensorBoard
+use_tensorboard = False
+remove_all_log = True # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 
 # ------------
@@ -76,7 +77,7 @@ is_resnet = cfg.RESNET.IS_TRUE
 batch_size = cfg.TRAIN.IMS_PER_BATCH
 lr = cfg.TRAIN.LEARNING_RATE
 momentum = cfg.TRAIN.MOMENTUM
-weight_decay = cfg.TRAIN.WEIGHT_DECAY
+
 disp_interval = cfg.TRAIN.DISPLAY
 log_interval = cfg.TRAIN.LOG_IMAGE_ITERS
 save_interval = cfg.TRAIN.SNAPSHOT_ITERS
@@ -94,6 +95,8 @@ dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 # load net
 if is_resnet:
     model_name = cfg.RESNET.MODEL
+    cfg.TRAIN.DOUBLE_BIAS = False
+    cfg.TRAIN.WEIGHT_DECAY = 0.0001
     net = FasterRCNN_RES(classes=imdb.classes, debug=_DEBUG)
     net.init_module()
 else:
@@ -147,7 +150,7 @@ t.tic()
 from math import isnan
 for epoch in range(start_epoch, end_epoch+1):
     pf, tot = 0., 0
-    tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
+    tp, fp, tn, fg, bg, tp_box, fg_box = 0., 0., 0., 0., 0., 0., 0.
     rpn_cls, rpn_box, rcnn_cls, rcnn_box, sim_loss = 0., 0., 0., 0., 0.
     net.train()
     if epoch > 1 and (epoch-1) % lr_decay_step == 0:
@@ -164,10 +167,10 @@ for epoch in range(start_epoch, end_epoch+1):
         # forward
         net.zero_grad()
         net(im_data, im_info, gt_boxes, num_boxes)
-
         if _DEBUG:
             tp += float(net.tp)
-            tf += float(net.tf)
+            tn += float(net.tn)
+            fp += float(net.fp)
             fg += net.fg_cnt
             bg += net.bg_cnt
             tp_box += float(net.rpn.tp)
@@ -189,6 +192,7 @@ for epoch in range(start_epoch, end_epoch+1):
         optimizer.zero_grad() # clear grad
         loss.backward()
         network.clip_gradient(net, 10.)
+        # print_weight_grad(net)
         optimizer.step()
 
         if step % disp_interval == 0:
@@ -206,8 +210,8 @@ for epoch in range(start_epoch, end_epoch+1):
                     tot += 1
                     pf += tp/fg*100
                     match_rate = net.match/net.set * 100. if cfg.TRIPLET.IS_TRUE else 0.
-                    log_print('\tEP: %.2f%%, TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d), TD: %.2f%%' %
-                        (tp_box/fg_box*100, tp/fg*100., tf/bg*100., fg/step_cnt, bg/step_cnt, match_rate))
+                    log_print('\tEP: %.2f%% PR: %.2f%% TP: %.2f%%, TF: %.2f%%, fg/bg=(%d/%d), TD: %.2f%%' %
+                        (tp_box/fg_box*100, tp/(tp+fp)*100, tp/fg*100., tn/bg*100., fg/step_cnt, bg/step_cnt, match_rate))
                     log_print('\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box: %.4f, sim_loss: %.4f' % (
                         rpn_cls/step_cnt, rpn_box/step_cnt, rcnn_cls/step_cnt, rcnn_box/step_cnt, sim_loss/step_cnt )
                     )
@@ -219,7 +223,8 @@ for epoch in range(start_epoch, end_epoch+1):
                 match_rate = net.match / net.set * 100. if cfg.TRIPLET.IS_TRUE else 0.
                 triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
                 exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)
-                exp.add_scalar_value('true_negative', tf/bg*100., step=cnt)
+                exp.add_scalar_value('true_negative', tn/bg*100., step=cnt)
+                exp.add_scalar_value('precision', tp / (tp+fp) * 100., step=cnt)
                 exp.add_scalar_value('true_distance', match_rate, step=cnt)
                 losses = {'rpn_cls': float(rpn_cls/step_cnt),
                           'rpn_box': float(rpn_box/step_cnt),
@@ -230,7 +235,7 @@ for epoch in range(start_epoch, end_epoch+1):
 
         if re_cnt:
             train_loss = 0
-            tp, tf, fg, bg, tp_box, fg_box = 0., 0., 0, 0, 0., 0
+            tp, fp, tn, fg, bg, tp_box, fg_box = 0., 0., 0., 0, 0, 0., 0
             rpn_cls, rpn_box, rcnn_cls, rcnn_box, sim_loss = 0., 0., 0., 0., 0.
             net.reset_match_count()
             step_cnt = 0
@@ -244,20 +249,20 @@ for epoch in range(start_epoch, end_epoch+1):
                              .format(imdb_name, epoch, model_name, fg_thresh, batch_size))
     network.save_net(save_name, net)
     print('save model: {}'.format(save_name))
-    if pf/tot > 70:
+    if pf/tot > 80:
         print('Entering Test Phase ...')
-        f = open('precision.txt', 'a')
-        precision = test(save_name, net, test_imdb, test_roidb)
+        f = open('PrecisionAndRecall.txt', 'a')
+        prec, rec = test(save_name, net, test_imdb, test_roidb)
         match = id_match_test(save_name, net, test_imdb, test_roidb, cfg.TRIPLET.LOSS) if cfg.TRIPLET.IS_TRUE else 0.
-        f.write(save_name + '  ----{:.2f}% / {:.2f}%\n'.format(precision, match))
+        f.write(save_name + '  ----[prec: {:.2f}%, rec: {:.2f}%] / {:.2f}%\n'.format(prec, rec, match))
         f.close()
         if previous_precision == 0.:
-            previous_precision = precision
+            previous_precision = prec
         else:
-            if previous_precision > precision:
+            if previous_precision > prec:
                 print('Precision decreased {:.2f}% -> {:.2f}% ...' \
-                      .format(previous_precision, precision))
+                      .format(previous_precision, prec))
                 import warnings
                 warnings.warn('test set Precision decreased. Keep Watching')
             else:
-                previous_precision = precision
+                previous_precision = prec

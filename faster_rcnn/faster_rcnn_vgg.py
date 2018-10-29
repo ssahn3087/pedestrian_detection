@@ -42,8 +42,7 @@ class RPN(nn.Module):
         self.anchor_scales = cfg.ANCHOR_SCALES
         self.anchor_ratios = cfg.ANCHOR_RATIOS
         self.feat_stride = cfg.FEAT_STRIDE[0]
-
-        self.features = VGG16(bn=False)
+        self._vgg16 = VGG16()
         self.conv1 = Conv2d(512, 512, 3, same_padding=True)
         self.score_conv = Conv2d(512, len(self.anchor_scales) * len(self.anchor_ratios) * 2, 1, relu=False,
                                  same_padding=False)
@@ -69,7 +68,7 @@ class RPN(nn.Module):
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
 
-        features = self.features(im_data)
+        features = self._vgg16(im_data)
         batch_size = features.size(0)
         rpn_conv1 = self.conv1(features)
         # rpn score
@@ -165,36 +164,27 @@ class RPN(nn.Module):
 
 
 class FasterRCNN(nn.Module):
-    n_classes = 21
-    # for pacal_voc but flexible
-    classes = np.asarray(['__background__',
-                          'aeroplane', 'bicycle', 'bird', 'boat',
-                          'bottle', 'bus', 'car', 'cat', 'chair',
-                          'cow', 'diningtable', 'dog', 'horse',
-                          'motorbike', 'person', 'pottedplant',
-                          'sheep', 'sofa', 'train', 'tvmonitor'])
-    PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
+
+    PIXEL_MEANS = cfg.PIXEL_MEANS
     SCALES = cfg.TRAIN.SCALES
     MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
 
-        if classes is not None:
-            self.classes = np.asarray(classes)
-            self.n_classes = len(classes)
+        self.classes = np.asarray(classes)
+        self.n_classes = len(classes)
 
         self.rpn = RPN(debug=debug)
+        self.vgg16 = self.rpn._vgg16
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0 / 16)
         elif cfg.POOLING_MODE == 'pool':
             self.roi_pool = RoIPool(7, 7, 1.0 / 16)
-        self.fc6 = FC(512 * 7 * 7, 4096)
-        self.fc7 = FC(4096, 4096)
+        self.fc_layer = self.vgg16.fc_layer
         self.score_fc = FC(4096, self.n_classes, relu=False)
         self.bbox_fc = FC(4096, self.n_classes * 4, relu=False)
-        self.fc_sim = FC(512 * 7 * 7, 4096, relu=False)
 
         # loss
         self.cross_entropy = 0
@@ -203,6 +193,7 @@ class FasterRCNN(nn.Module):
         # for log
         self.debug = debug
         if cfg.TRIPLET.IS_TRUE:
+            self.fc_sim = FC(512 * 7 * 7, 4096, relu=False)
             pos_weight = torch.ones(3)
             pos_weight[0] = 2.0
             if self.debug:
@@ -250,11 +241,7 @@ class FasterRCNN(nn.Module):
         pooled_features = self.roi_pool(features, rois.view(-1, 5))
 
         x = pooled_features.view(pooled_features.size(0), -1)
-        x = self.fc6(x)
-        x = F.dropout(x, training=self.training)
-        x = self.fc7(x)
-        x = F.dropout(x, training=self.training)
-
+        x = self.fc_layer(x)
         cls_score = self.score_fc(x)
         cls_prob = F.softmax(cls_score, dim=1)
         bbox_pred = self.bbox_fc(x)
@@ -298,9 +285,11 @@ class FasterRCNN(nn.Module):
         if self.debug:
             maxv, predict = cls_score.data.max(1)
             tp = label.data.eq(predict) * label.data.ne(0)
-            tf = label.data.eq(0) * predict.eq(0)
+            fp = label.data.eq(0) * predict.ne(0)
+            tn = label.data.eq(0) * predict.eq(0)
             self.tp = torch.sum(tp) if fg_cnt > 0 else 0
-            self.tf = torch.sum(tf)
+            self.tn = torch.sum(tn)
+            self.fp = torch.sum(fp)
             self.fg_cnt = fg_cnt
             self.bg_cnt = bg_cnt
 
@@ -474,42 +463,6 @@ class FasterRCNN(nn.Module):
 
         return blob, np.array(im_scale_factors)
 
-    def load_pretrained_vgg16(self, fname):
-        import os
-        assert os.path.exists(fname), \
-            'Pretrained model does not exist: {}'.format(fname)
-        params = np.load(fname, encoding='latin1').item()
-        print("loaded vgg16 model from %s" % fname)
-        # vgg16
-        vgg16_dict = self.rpn.features.state_dict()
-        for name, val in vgg16_dict.items():
-            # # print name
-            # # print val.size()
-            # # print param.size()
-            if name.find('bn.') >= 0:
-                continue
-            i, j = int(name[4]), int(name[6]) + 1
-            ptype = 'weights' if name[-1] == 't' else 'biases'
-            key = 'conv{}_{}'.format(i, j)
-            param = torch.from_numpy(params[key][ptype])
-
-            if ptype == 'weights':
-                param = param.permute(3, 2, 0, 1)
-
-            val.copy_(param)
-
-        # fc6 fc7
-        frcnn_dict = self.state_dict()
-        pairs = {'fc6.fc': 'fc6', 'fc7.fc': 'fc7'}
-        for k, v in pairs.items():
-            key = '{}.weight'.format(k)
-            param = torch.from_numpy(params[v]['weights']).permute(1, 0)
-            frcnn_dict[key].copy_(param)
-
-            key = '{}.bias'.format(k)
-            param = torch.from_numpy(params[v]['biases'])
-            frcnn_dict[key].copy_(param)
-
     def _init_faster_rcnn_vgg16(self):
         weights_normal_init(self)
-        self.load_pretrained_vgg16(self.rpn.features.model_path)
+        self.vgg16.load_pretrained_vgg16()

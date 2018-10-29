@@ -22,8 +22,6 @@ from faster_rcnn.roi_align.modules.roi_align import RoIAlign
 from faster_rcnn.roi_pooling.modules.roi_pool import RoIPool
 from faster_rcnn.resnet import RESNET
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
-cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-cfg_from_file(cfg_file)
 
 def nms_detections(pred_boxes, scores, nms_thresh, inds=None):
     dets = torch.cat((pred_boxes, scores.unsqueeze(1)), 1)
@@ -62,7 +60,7 @@ class RPN(nn.Module):
 
     @property
     def loss(self):
-        return self.cross_entropy + self.loss_box
+        return self.cross_entropy + 10 * self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
 
@@ -163,23 +161,14 @@ class RPN(nn.Module):
 
 
 class FasterRCNN(nn.Module):
-    n_classes = 21
-    # for pacal_voc but flexible
-    classes = np.asarray(['__background__',
-                       'aeroplane', 'bicycle', 'bird', 'boat',
-                       'bottle', 'bus', 'car', 'cat', 'chair',
-                       'cow', 'diningtable', 'dog', 'horse',
-                       'motorbike', 'person', 'pottedplant',
-                       'sheep', 'sofa', 'train', 'tvmonitor'])
-    PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
+    PIXEL_MEANS = cfg.PIXEL_MEANS
     SCALES = cfg.TRAIN.SCALES
     MAX_SIZE = cfg.TRAIN.MAX_SIZE
 
     def __init__(self, classes=None, debug=False):
         super(FasterRCNN, self).__init__()
-        if classes is not None:
-            self.classes = np.asarray(classes)
-            self.n_classes = len(classes)
+        self.classes = np.asarray(classes)
+        self.n_classes = len(classes)
 
         self.rpn = RPN(debug=debug)
         self.resnet = self.rpn._resnet
@@ -191,7 +180,6 @@ class FasterRCNN(nn.Module):
         self.post_fc = self.resnet.PostFC_layer
         self.score_fc = FC(2048, self.n_classes, relu=False)
         self.bbox_fc = FC(2048, self.n_classes * 4, relu=False)
-        self.fc_sim = FC(512 * 7 * 7, 2048, relu=False)
 
         # loss
         self.cross_entropy = 0
@@ -200,6 +188,7 @@ class FasterRCNN(nn.Module):
         # for log
         self.debug = debug
         if cfg.TRIPLET.IS_TRUE:
+            self.fc_sim = FC(512 * 7 * 7, 2048, relu=False)
             pos_weight = torch.ones(3)
             pos_weight[0] = 2.0
             if self.debug:
@@ -218,7 +207,7 @@ class FasterRCNN(nn.Module):
         self.init_module = self._init_faster_rcnn_resnet
     @property
     def loss(self):
-        return self.cross_entropy + self.loss_box
+        return self.cross_entropy + 10 * self.loss_box
 
     def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
@@ -291,9 +280,11 @@ class FasterRCNN(nn.Module):
         if self.debug:
             maxv, predict = cls_score.data.max(1)
             tp = label.data.eq(predict) * label.data.ne(0)
-            tf = label.data.eq(0)*predict.eq(0)
+            fp = label.data.eq(0) * predict.ne(0)
+            tn = label.data.eq(0) * predict.eq(0)
             self.tp = torch.sum(tp) if fg_cnt > 0 else 0
-            self.tf = torch.sum(tf)
+            self.tn = torch.sum(tn)
+            self.fp = torch.sum(fp)
             self.fg_cnt = fg_cnt
             self.bg_cnt = bg_cnt
 

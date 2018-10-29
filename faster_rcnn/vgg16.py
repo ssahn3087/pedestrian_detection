@@ -1,49 +1,39 @@
-import cv2
-import numpy as np
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.autograd import Variable
-
-from faster_rcnn.utils.blob import im_list_to_blob
-from faster_rcnn.network import Conv2d
-import faster_rcnn.network as network
+import math
+import torchvision.models as models
+import pdb
 
 
 class VGG16(nn.Module):
-    def __init__(self, bn=False):
+    def __init__(self):
         super(VGG16, self).__init__()
-        self.model_path = 'data/pretrained_model/base/VGG_imagenet.npy'
+        self.model_path = 'data/pretrained_model/base/vgg16_caffe.pth'
+        vgg = models.vgg16()
+        self.vgg = vgg
+        self.vgg.classifier = nn.Sequential(*list(vgg.classifier._modules.values())[:-1])
 
-        self.conv1 = nn.Sequential(Conv2d(3, 64, 3, same_padding=True, bn=bn),
-                                   Conv2d(64, 64, 3, same_padding=True, bn=bn),
-                                   nn.MaxPool2d(2))
-        self.conv2 = nn.Sequential(Conv2d(64, 128, 3, same_padding=True, bn=bn),
-                                   Conv2d(128, 128, 3, same_padding=True, bn=bn),
-                                   nn.MaxPool2d(2))
-        network.set_trainable(self.conv1, requires_grad=False)
-        network.set_trainable(self.conv2, requires_grad=False)
+        # not using the last maxpool layer
+        self.features = nn.Sequential(*list(vgg.features._modules.values())[:-1])
 
-        self.conv3 = nn.Sequential(Conv2d(128, 256, 3, same_padding=True, bn=bn),
-                                   Conv2d(256, 256, 3, same_padding=True, bn=bn),
-                                   Conv2d(256, 256, 3, same_padding=True, bn=bn),
-                                   nn.MaxPool2d(2))
-        self.conv4 = nn.Sequential(Conv2d(256, 512, 3, same_padding=True, bn=bn),
-                                   Conv2d(512, 512, 3, same_padding=True, bn=bn),
-                                   Conv2d(512, 512, 3, same_padding=True, bn=bn),
-                                   nn.MaxPool2d(2))
-        self.conv5 = nn.Sequential(Conv2d(512, 512, 3, same_padding=True, bn=bn),
-                                   Conv2d(512, 512, 3, same_padding=True, bn=bn),
-                                   Conv2d(512, 512, 3, same_padding=True, bn=bn))
+        # Fix the layers before conv3:
+        for layer in range(10):
+            for p in self.features[layer].parameters(): p.requires_grad = False
+
+        self.fc_layer = self.vgg.classifier
+        self.load_pretrained_vgg16 = self._load_vgg16
+
+    def _load_vgg16(self):
+        print("Loading pretrained weights from %s" % (self.model_path))
+        state_dict = torch.load(self.model_path)
+        self.vgg.load_state_dict({k: v for k, v in state_dict.items() if k in self.vgg.state_dict()})
 
     def forward(self, im_data):
-
-        x = self.conv1(im_data)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.conv5(x)
+        x = self.features(im_data)
         return x
-
-
-if __name__ == '__main__':
-    vgg = VGG16()
