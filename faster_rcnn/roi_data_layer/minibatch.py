@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import cv2
 import numpy as np
 import numpy.random as npr
 from scipy.misc import imread
@@ -55,15 +56,15 @@ def _get_image_blob(roidb, scale_inds):
     processed_ims = []
     im_scales = []
     for i in range(num_images):
-        # im = cv2.imread(roidb[i]['image'])
-        im = imread(roidb[i]['image'])
+        im = cv2.imread(roidb[i]['image'])
+        # im = imread(roidb[i]['image'])
 
         if len(im.shape) == 2:
             im = im[:, :, np.newaxis]
             im = np.concatenate((im, im, im), axis=2)
         # flip the channel, since the original one using cv2
         # rgb -> bgr
-        im = im[:, :, ::-1]
+        #im = im[:, :, ::-1]
 
         if roidb[i]['flipped']:
             im = im[:, ::-1, :]

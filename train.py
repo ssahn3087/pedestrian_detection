@@ -37,10 +37,10 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-test_name = 'voc_2007_val'
-# imdb_name = 'coco_2017_train'
-# test_name = 'coco_2017_val'
+# imdb_name = 'voc_2007_trainval'
+# test_name = 'voc_2007_val'
+imdb_name = 'coco_2017_train'
+test_name = 'coco_2017_val'
 #imdb_name = 'CaltechPedestrians_train_triplet'
 #test_name = 'CaltechPedestrians_test_triplet'
 
@@ -48,7 +48,7 @@ test_name = 'voc_2007_val'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'CaltechPedestrians_train_1_vgg16_0.7_b1.h5'
+pre_model_name = 'voc_2007_trainval_4_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
@@ -105,7 +105,7 @@ else:
     net.init_module()
 if cfg.TRIPLET.IS_TRUE:
     model_name += '_' + cfg.TRIPLET.LOSS
-#network.load_net(pretrained_model, net)
+# network.load_net(pretrained_model, net)
 #network.load_net_pedestrians(pretrained_model, net, 1)
 
 blob = init_data(is_cuda=True)

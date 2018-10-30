@@ -46,7 +46,7 @@ def track():
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'CaltechPedestrians_train_2_resnet50_0.7_b3.h5'
+    pre_model_name = 'CaltechPedestrians_train_2_vgg16_0.7_b3.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
     name_blocks = pre_model_name.split('_')
