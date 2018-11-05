@@ -42,9 +42,9 @@ def test(model, detector, imdb, roidb):
             candidates = overlaps.argmax(axis=1)
             ovmax = overlaps.max(axis=1)
             for k, arg in enumerate(candidates):
-                detected_class = imdb._class_to_ind[classes[arg]]
+                detected_class = imdb._class_to_ind[classes[k]]
                 if ovmax[k] > 0.5:
-                    if detected_class == gt_classes[k]:
+                    if detected_class == gt_classes[arg]:
                         tp += 1
                     else:
                         fp += 1
@@ -154,7 +154,7 @@ def score_analysis(model, detector, imdb, roidb):
 if __name__ == '__main__':
     # hyper-parameters
     # ------------
-    imdb_name = 'voc_2007_val'
+    imdb_name = 'voc_2007_test'
     model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)
     pretrained_model = [os.path.join(model_dir, model) for model in models]
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     imdb = get_imdb(imdb_name)
     prepare_roidb(imdb)
     roidb = imdb.roidb
-    f = open(os.path.join(model_dir, 'precision.txt'), 'a')
+    f = open(os.path.join(model_dir, 'performance.txt'), 'a')
 
     for model in pretrained_model:
         is_resnet = True if 'res' in model.split('/') else False

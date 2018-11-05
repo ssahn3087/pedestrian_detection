@@ -158,10 +158,7 @@ __C.TRAIN.PROPOSAL_METHOD = 'gt'
 # Make minibatches from images that have similar aspect ratios (i.e. both
 # tall and thin or both short and wide) in order to avoid wasting computation
 # on zero-padding.
-__C.TRAIN.ASPECT_GROUPING = True
-# preclude rois intersected with dontcare areas above the value
-__C.TRAIN.DONTCARE_AREA_INTERSECTION_HI = 0.5
-__C.TRAIN.PRECLUDE_HARD_SAMPLES = True
+
 # Use RPN to detect objects
 __C.TRAIN.HAS_RPN = True
 # IOU >= thresh: positive example
@@ -181,7 +178,7 @@ __C.TRAIN.RPN_PRE_NMS_TOP_N = 12000
 # Number of top scoring boxes to keep after applying NMS to RPN proposals
 __C.TRAIN.RPN_POST_NMS_TOP_N = 2000
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
-__C.TRAIN.RPN_MIN_SIZE = 16
+__C.TRAIN.RPN_MIN_SIZE = 8
 # Deprecated (outside weights)
 __C.TRAIN.RPN_BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # Give the positive RPN examples weight of p * 1 / {num positives}
@@ -250,7 +247,7 @@ __C.RESNET.FIXED_BLOCKS = 1
 
 __C.RESNET.IS_TRUE = False
 
-__C.RESNET.MODEL = 'resnet50'
+__C.RESNET.MODEL = 'res101'
 
 
 

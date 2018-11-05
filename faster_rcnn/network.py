@@ -4,6 +4,8 @@ import torch.nn.init as init
 from torch.autograd import Variable
 import numpy as np
 import numpy.random as npr
+import cv2
+
 
 class Conv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, relu=True, same_padding=False, bn=False):
@@ -34,6 +36,16 @@ class FC(nn.Module):
             x = self.relu(x)
         return x
 
+def vis_detections(im, class_name, dets, thresh=0.8):
+    """Visual debugging of detections."""
+    for i in range(np.minimum(10, dets.shape[0])):
+        bbox = tuple(int(np.round(x)) for x in dets[i, :4])
+        score = dets[i, -1]
+        if score > thresh:
+            cv2.rectangle(im, bbox[0:2], bbox[2:4], (0, 204, 0), 2)
+            cv2.putText(im, '%s: %.3f' % (class_name, score), (bbox[0], bbox[1] + 15), cv2.FONT_HERSHEY_PLAIN,
+                        1.0, (0, 0, 255), thickness=1)
+    return im
 
 def save_net(fname, net):
     import h5py
@@ -168,7 +180,7 @@ def set_trainable(model, requires_grad):
 
 def print_weight_grad(model):
     for k, p in model.named_parameters():
-        if p.grad is not None and k.startswith('fc'):
+        if p.grad is not None:
             print(k, p.data.shape, p.sum().data.cpu().numpy(), " GRADIENT  ", p.grad.sum().data.cpu().numpy())
 
 
@@ -180,15 +192,15 @@ def weights_normal_init(model, dev=0.01):
     else:
         for m in model.modules():
             if isinstance(m, nn.Conv2d):
-                init.xavier_uniform(m.weight)
+                # init.xavier_uniform(m.weight)
+                m.weight.data.normal_(0.0, dev)
                 if m.bias is not None:
                     m.bias.data.zero_()
-                # m.weight.data.normal_(0.0, dev)
             elif isinstance(m, nn.Linear):
-                init.xavier_uniform(m.weight)
+                # init.xavier_uniform(m.weight)
+                m.weight.data.normal_(0.0, dev)
                 if m.bias is not None:
                     m.bias.data.zero_()
-                # m.weight.data.normal_(0.0, dev)
 
 
 def clip_gradient(model, clip_norm):

@@ -112,11 +112,11 @@ def voc_eval(detpath,
                     i + 1, len(imagenames)))
         # save
         print ('Saving cached annotations to {:s}'.format(cachefile))
-        with open(cachefile, 'w') as f:
-            cPickle.dump(recs, f)
+        with open(cachefile, 'wb') as f:
+            cPickle.dump(recs, f, cPickle.HIGHEST_PROTOCOL)
     else:
         # load
-        with open(cachefile, 'r') as f:
+        with open(cachefile, 'rb') as f:
             recs = cPickle.load(f)
 
     # extract gt objects for this class

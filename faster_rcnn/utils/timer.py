@@ -20,6 +20,7 @@ class Timer(object):
         # using time.time instead of time.clock because time time.clock
         # does not normalize for multithreading
         self.start_time = time.time()
+        return time.time()
 
     def toc(self, average=True):
         self.diff = time.time() - self.start_time

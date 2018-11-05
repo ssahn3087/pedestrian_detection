@@ -10,7 +10,7 @@ from faster_rcnn.network import train_net_params, print_weight_grad
 from faster_rcnn.faster_rcnn_vgg import FasterRCNN as FasterRCNN_VGG
 from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
-from test_model import test, id_match_test
+from val import test, id_match_test
 from faster_rcnn.roi_data_layer.sampler import sampler
 from faster_rcnn.roi_data_layer.roidb import extract_roidb
 from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
@@ -37,10 +37,10 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-# imdb_name = 'voc_2007_trainval'
-# test_name = 'voc_2007_val'
-imdb_name = 'coco_2017_train'
-test_name = 'coco_2017_val'
+imdb_name = 'voc_2007_trainval'
+test_name = 'voc_2007_test'
+# imdb_name = 'coco_2017_train'
+# test_name = 'coco_2017_val'
 #imdb_name = 'CaltechPedestrians_train_triplet'
 #test_name = 'CaltechPedestrians_test_triplet'
 
@@ -48,20 +48,19 @@ test_name = 'coco_2017_val'
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'voc_2007_trainval_4_vgg16_0.7_b1.h5'
+pre_model_name = 'voc_2007_trainval_10_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
-
-end_epoch = 10
+end_epoch = 15
 lr_decay_step = 5
-lr_decay = 0.5
+lr_decay = 0.1
 rand_seed = 1024
 
 
 _DEBUG = True
-use_tensorboard = False
+use_tensorboard = True
 remove_all_log = True # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 

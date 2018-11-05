@@ -12,7 +12,7 @@ import PIL
 import numpy as np
 import scipy.sparse
 import subprocess
-import cPickle
+import pickle as cPickle
 import math
 import glob
 import uuid

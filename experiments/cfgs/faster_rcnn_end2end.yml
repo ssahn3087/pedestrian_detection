@@ -10,7 +10,7 @@ TRIPLET:
   MAX_BG : 3
   LOSS: log
 RESNET:
-  IS_TRUE : False
+  IS_TRUE : True
   FIXED_BLOCKS : 1
   MODEL: res101
 TRAIN:
@@ -25,8 +25,8 @@ TRAIN:
   MOMENTUM: 0.9
   BG_THRESH_HI: 0.5
   BG_THRESH_LO: 0.1
-  SCALES : [800]
-  MAX_SIZE : 1200
+  SCALES : [600]
+  MAX_SIZE : 1000
 
 TEST:
   HAS_RPN: True
