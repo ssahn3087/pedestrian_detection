@@ -7,7 +7,7 @@ from faster_rcnn.faster_rcnn_res import FasterRCNN as FasterRCNN_RES
 from faster_rcnn.utils.timer import Timer
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 from faster_rcnn.datasets.factory import get_imdb
-
+from faster_rcnn.roi_data_layer.minibatch import process_img_by_lib
 
 global video_file
 global output_file
@@ -21,7 +21,7 @@ def test():
     imdb = get_imdb(imdb_name)
     cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
     model_dir = 'data/pretrained_model/'
-    pre_model_name = 'CaltechPedestrians_train_3_vgg16_0.7_b3.h5'
+    pre_model_name = 'CaltechPedestrians_train_10_vgg16_0.7_b3.h5'
     pretrained_model = model_dir + pre_model_name
     cfg_from_file(cfg_file)
 

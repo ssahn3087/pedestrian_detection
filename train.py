@@ -34,26 +34,25 @@ def log_print(text, color='blue', on_color=None, attrs=None):
         print(text)
 
 
-
 # hyper-parameters
 # ------------
-imdb_name = 'voc_2007_trainval'
-test_name = 'voc_2007_test'
+# imdb_name = 'voc_2007_trainval'
+# test_name = 'voc_2007_test'
 # imdb_name = 'coco_2017_train'
 # test_name = 'coco_2017_val'
-#imdb_name = 'CaltechPedestrians_train_triplet'
-#test_name = 'CaltechPedestrians_test_triplet'
+imdb_name = 'CaltechPedestrians_train'
+test_name = 'CaltechPedestrians_test'
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/saved_model3'
-pre_model_name = 'voc_2007_trainval_10_vgg16_0.7_b1.h5'
+pre_model_name = 'voc_2007_trainval_14_vgg16_0.7_b1.h5'
 pretrained_model = model_dir + pre_model_name
 
 
 start_epoch = 1
-end_epoch = 15
+end_epoch = 10
 lr_decay_step = 5
 lr_decay = 0.1
 rand_seed = 1024
@@ -61,7 +60,7 @@ rand_seed = 1024
 
 _DEBUG = True
 use_tensorboard = True
-remove_all_log = True # remove all historical experiments in TensorBoard
+remove_all_log = False # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 
 # ------------
@@ -105,7 +104,8 @@ else:
 if cfg.TRIPLET.IS_TRUE:
     model_name += '_' + cfg.TRIPLET.LOSS
 # network.load_net(pretrained_model, net)
-#network.load_net_pedestrians(pretrained_model, net, 1)
+# person_key = 15 (pascal_voc) user_defined_coco_set = 1
+network.load_net_pedestrians(pretrained_model, net, person_key=15)
 
 blob = init_data(is_cuda=True)
 
@@ -194,7 +194,7 @@ for epoch in range(start_epoch, end_epoch+1):
         # print_weight_grad(net)
         optimizer.step()
 
-        if step % disp_interval == 0:
+        if step % disp_interval == 0 and step > 0:
             duration = t.toc(average=False)
             fps = step_cnt / duration
 
@@ -215,10 +215,11 @@ for epoch in range(start_epoch, end_epoch+1):
                         rpn_cls/step_cnt, rpn_box/step_cnt, rcnn_cls/step_cnt, rcnn_box/step_cnt, sim_loss/step_cnt )
                     )
             re_cnt = True
-        if use_tensorboard and cnt % log_interval == 0:
+        if use_tensorboard and cnt % log_interval == 0 and cnt > 0:
             exp.add_scalar_value('train_loss', train_loss / step_cnt, step=cnt)
             exp.add_scalar_value('learning_rate', lr, step=cnt)
             if _DEBUG:
+
                 match_rate = net.match / net.set * 100. if cfg.TRIPLET.IS_TRUE else 0.
                 triplet_loss = net.triplet_loss.data.cpu().numpy() if cfg.TRIPLET.IS_TRUE else 0.
                 exp.add_scalar_value('true_positive', tp/fg*100., step=cnt)

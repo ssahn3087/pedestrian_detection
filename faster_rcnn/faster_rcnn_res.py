@@ -171,13 +171,12 @@ class FasterRCNN(nn.Module):
         self.n_classes = len(classes)
 
         self.rpn = RPN(debug=debug)
-        self.resnet = self.rpn._resnet
         self.proposal_target_layer = proposal_target_layer_py(self.n_classes)
         if cfg.POOLING_MODE == 'align':
             self.roi_pool = RoIAlign(7, 7, 1.0/16)
         elif cfg.POOLING_MODE == 'pool':
             self.roi_pool = RoIPool(7, 7, 1.0/16)
-        self.post_fc = self.resnet.PostFC_layer
+
         self.score_fc = FC(2048, self.n_classes, relu=False)
         self.bbox_fc = FC(2048, self.n_classes * 4, relu=False)
 
@@ -234,7 +233,7 @@ class FasterRCNN(nn.Module):
 
         # roi pool
         pooled_features = self.roi_pool(features, rois.view(-1, 5))
-        x = self.post_fc(pooled_features).mean(3).mean(2)
+        x = self.rpn._resnet.PostFC_layer(pooled_features).mean(3).mean(2)
 
         x = F.dropout(x, training=self.training)
         cls_score = self.score_fc(x)
@@ -459,4 +458,4 @@ class FasterRCNN(nn.Module):
 
     def _init_faster_rcnn_resnet(self):
         weights_normal_init(self)
-        self.resnet.load_pretrained_resnet()
+        self.rpn._resnet.load_pretrained_resnet()

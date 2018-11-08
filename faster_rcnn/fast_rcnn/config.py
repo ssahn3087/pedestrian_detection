@@ -53,8 +53,7 @@ __C.IS_EXTRAPOLATING = True
 
 __C.REGION_PROPOSAL = 'RPN'
 
-__C.NET_NAME = 'VGGnet'
-__C.SUBCLS_NAME = 'voxel_exemplars'
+__C.IMAGE_PROCESS_LIB = 'cv2'
 
 __C.TRIPLET = edict()
 

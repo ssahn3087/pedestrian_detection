@@ -5,10 +5,10 @@ from __future__ import print_function
 import cv2
 import numpy as np
 import numpy.random as npr
-from scipy.misc import imread
-from faster_rcnn.fast_rcnn.config import cfg
+from scipy.misc import imread as sciImread
+from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
 from ..utils.blob import prep_im_for_blob, im_list_to_blob
-import pdb
+
 
 
 def get_minibatch(roidb, num_classes):
@@ -51,23 +51,14 @@ def _get_image_blob(roidb, scale_inds):
     """Builds an input blob from the images in the roidb at the specified
     scales.
     """
+
     num_images = len(roidb)
 
     processed_ims = []
     im_scales = []
     for i in range(num_images):
-        im = cv2.imread(roidb[i]['image'])
-        # im = imread(roidb[i]['image'])
-
-        if len(im.shape) == 2:
-            im = im[:, :, np.newaxis]
-            im = np.concatenate((im, im, im), axis=2)
-        # flip the channel, since the original one using cv2
-        # rgb -> bgr
-        #im = im[:, :, ::-1]
-
-        if roidb[i]['flipped']:
-            im = im[:, ::-1, :]
+        # im = cv2.imread(roidb[i]['image'])
+        im = process_img_by_lib(roidb[i]['image'])
         target_size = cfg.TRAIN.SCALES[scale_inds[i]]
         im, im_scale = prep_im_for_blob(im, cfg.PIXEL_MEANS, target_size,
                                         cfg.TRAIN.MAX_SIZE)
@@ -77,5 +68,30 @@ def _get_image_blob(roidb, scale_inds):
     # Create a blob to hold the input images
     blob = im_list_to_blob(processed_ims)
 
-
     return blob, im_scales
+
+
+def process_img_by_lib(path):
+    cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
+    cfg_from_file(cfg_file)
+    if cfg.IMAGE_PROCESS_LIB == 'cv2':
+        imread = cv2.imread
+        RGB2BGR = False
+    elif cfg.IMAGE_PROCESS_LIB == 'sci':
+        # this is same with PIL
+        imread = sciImread
+        RGB2BGR = True
+    else:
+        print("IMAGE PROCESS LIB IS NOT DEFINED")
+        raise ModuleNotFoundError
+    im = imread(path)
+
+    if len(im.shape) == 2:
+        im = im[:, :, np.newaxis]
+        im = np.concatenate((im, im, im), axis=2)
+    # flip the channel, since the original one using cv2
+    # rgb -> bgr
+    if RGB2BGR:
+        im = im[:, :, ::-1]
+
+    return im

@@ -16,7 +16,7 @@ from faster_rcnn.roi_data_layer.roibatchLoader import roibatchLoader
 from faster_rcnn.roi_data_layer.roidb import prepare_roidb
 from faster_rcnn.utils.cython_bbox import bbox_overlaps
 from faster_rcnn.fast_rcnn.config import cfg, cfg_from_file
-
+from faster_rcnn.roi_data_layer.minibatch import process_img_by_lib
 
 def test(model, detector, imdb, roidb):
 
@@ -31,10 +31,10 @@ def test(model, detector, imdb, roidb):
     for i in range(test_num):
         gt_boxes = roidb[i]['boxes']
         gt_classes = roidb[i]['gt_classes']
-        image = cv2.imread(roidb[i]['image'])
+        image = process_img_by_lib(roidb[i]['image'])
         npos += len(gt_boxes)
         try:
-            dets, scores, classes = detector.detect(image, blob, thr=0.7, nms_thresh=0.3)
+            dets, scores, classes = detector.detect(image, blob, thr=0.8, nms_thresh=0.3)
             # dets : N x 4, gt_boxes : K x 4
             # overlaps : N x K overlaps score
             overlaps = bbox_overlaps(np.ascontiguousarray(dets, dtype=np.float) \
@@ -54,7 +54,7 @@ def test(model, detector, imdb, roidb):
         except:
             pass
 
-        sys.stdout.write('{:d}/{:d} Precision : {:.2f}, Recall : {:.2f}, Model : {:s}\r'\
+        sys.stdout.write('Eval {:d}/{:d} Precision : {:.2f}, Recall : {:.2f}, Model : {:s}\r'\
                          .format(i+1,test_num,tp/(fp+tp)*100, tp/npos*100, model))
         sys.stdout.flush()
     print('\tPrecision: %.2f%%, Recall: %.2f%%\n' % (tp/(fp+tp)*100, tp/npos*100), model)
@@ -157,10 +157,10 @@ def score_analysis(model, detector, imdb, roidb):
 if __name__ == '__main__':
     # hyper-parameters
     # ------------
-    imdb_name = 'voc_2007_test'
+    imdb_name = 'CaltechPedestrians_test'
     model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)
-    pretrained_model = [os.path.join(model_dir, model) for model in models]
+    pretrained_model = [os.path.join(model_dir, model) for model in models if 'CaltechPedestrians' in model.split('_')]
     pretrained_model.sort()
 
 

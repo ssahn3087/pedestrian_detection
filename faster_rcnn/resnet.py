@@ -221,6 +221,8 @@ class RESNET(nn.Module):
         self.features.apply(set_bn_fix)
         self.PostFC_layer.apply(set_bn_fix)
 
+        del self.resnet
+
     def train(self, mode=True):
         # Override train so that the training mode is set as we want
         nn.Module.train(self, mode)

@@ -33,7 +33,7 @@ class VGG16(nn.Module):
         print("Loading pretrained weights from %s" % (self.model_path))
         state_dict = torch.load(self.model_path)
         self.vgg.load_state_dict({k: v for k, v in state_dict.items() if k in self.vgg.state_dict()})
-
+        del self.vgg
     def forward(self, im_data):
         x = self.features(im_data)
         return x

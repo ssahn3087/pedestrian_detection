@@ -21,9 +21,9 @@ from faster_rcnn.nms.nms_wrapper import nms
 test_name = 'voc_2007_test'
 vis = False
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-model_dir = 'models/saved_model3/vgg16/'
+model_dir = 'data/pretrained_model/'
 output_dir = 'models/det_file/'
-pre_model_name = 'vgg16_fast_rcnn_iter_70000.h5'
+pre_model_name = 'voc_2007_trainval_jwyang_vgg16_0.7_b1.h5'
 output_dir += pre_model_name.split('_')[-3]
 pretrained_model = model_dir + pre_model_name
 thresh = 0.05 if vis else 0.0
@@ -69,8 +69,6 @@ if __name__ == '__main__':
         is_resnet = True if 'res' in pre_model_name else False
         if is_resnet:
             model_name = cfg.RESNET.MODEL
-            cfg.TRAIN.DOUBLE_BIAS = False
-            cfg.TRAIN.WEIGHT_DECAY = 0.0001
             net = FasterRCNN_RES(classes=imdb.classes, debug=False)
             net.init_module()
         else:
@@ -98,7 +96,6 @@ if __name__ == '__main__':
                                                  shuffle=False, num_workers=0,
                                                  pin_memory=True)
         data_iter = iter(dataloader)
-
 
         empty_array = np.transpose(np.array([[], [], [], [], []]), (1, 0))
 
