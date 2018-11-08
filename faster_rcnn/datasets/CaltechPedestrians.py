@@ -22,7 +22,7 @@ class CaltechPedestrians(imdb):
         self.num_triplet_test_images = 3
         # object image condition ex) bbox of object is too small to recognize
         self.area_thresh = 200.0
-        self.scene_per_episode_max = 15 if image_set == 'train' else 5
+        self.scene_per_episode_max = 25 if image_set == 'train' else 10
         self.image_path = os.path.join(cfg.DATA_DIR, self._prefix, "images")
         self.annotations_path = os.path.join(cfg.DATA_DIR, self._prefix, "annotations")
         self.annotations_file_name = "annotations.json"
@@ -34,7 +34,11 @@ class CaltechPedestrians(imdb):
                          'person')
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self._roidb_handler = self.gt_roidb
-        self._image_index = self.update_image_index()
+        try:
+            self._image_index = self.update_image_index()
+        except FileNotFoundError as e:
+            print(e)
+            print("Init from Factory")
 
     """
     Dataset from : http://www.vision.caltech.edu/Image_Datasets/CaltechPedestrians/
@@ -252,9 +256,8 @@ class CaltechPedestrians(imdb):
         occl = int(obj['occl'])
         area = float(pos[2] * pos[3])
         # take label == 'person' / areas > 200.0
-        if self.image_set == 'test':
-            occl = 0
-            self.area_thresh = 0
+        # if self.image_set == 'test':
+        #     self.area_thresh = 0
 
         if label != 'person' or area < self.area_thresh or occl == 1:
             return False

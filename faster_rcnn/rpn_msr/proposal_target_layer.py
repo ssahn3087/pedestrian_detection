@@ -208,7 +208,7 @@ class proposal_target_layer(nn.Module):
 
         self.fg_rois += torch.sum(labels_batch.ne(0))
         if self.fg_rois == labels_batch.numel():
-            all_rois
+            # all_rois
             raise RuntimeError
         bbox_target_data = self._compute_targets_pytorch(
             rois_batch[:, :, 1:5], gt_rois_batch[:, :, :4])

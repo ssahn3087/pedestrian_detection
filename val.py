@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import numpy as np
 from torch.autograd import Variable
@@ -33,7 +34,7 @@ def test(model, detector, imdb, roidb):
         image = cv2.imread(roidb[i]['image'])
         npos += len(gt_boxes)
         try:
-            dets, scores, classes = detector.detect(image, blob, thr=0.0, nms_thresh=0.3)
+            dets, scores, classes = detector.detect(image, blob, thr=0.7, nms_thresh=0.3)
             # dets : N x 4, gt_boxes : K x 4
             # overlaps : N x K overlaps score
             overlaps = bbox_overlaps(np.ascontiguousarray(dets, dtype=np.float) \
@@ -52,8 +53,10 @@ def test(model, detector, imdb, roidb):
                     fp += 1
         except:
             pass
-        # if (i % 20 == 0) and i > 0:
-        #     print('\tPrecision: %.2f%%, Recall: %.2f%%\n' % (tp/(fp+tp)*100, tp/npos*100), model)
+
+        sys.stdout.write('{:d}/{:d} Precision : {:.2f}, Recall : {:.2f}, Model : {:s}\r'\
+                         .format(i+1,test_num,tp/(fp+tp)*100, tp/npos*100, model))
+        sys.stdout.flush()
     print('\tPrecision: %.2f%%, Recall: %.2f%%\n' % (tp/(fp+tp)*100, tp/npos*100), model)
     return tp/(fp+tp)*100, tp/npos*100
 

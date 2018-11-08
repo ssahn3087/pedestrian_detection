@@ -19,11 +19,11 @@ from faster_rcnn.nms.nms_wrapper import nms
 # hyper-parameters
 # ------------
 test_name = 'voc_2007_test'
-vis = True
+vis = False
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
-model_dir = 'data/pretrained_model/'
+model_dir = 'models/saved_model3/vgg16/'
 output_dir = 'models/det_file/'
-pre_model_name = 'voc_2007_trainval_15_res101_0.7_b1.h5'
+pre_model_name = 'vgg16_fast_rcnn_iter_70000.h5'
 output_dir += pre_model_name.split('_')[-3]
 pretrained_model = model_dir + pre_model_name
 thresh = 0.05 if vis else 0.0
@@ -170,7 +170,6 @@ if __name__ == '__main__':
 
             misc_toc = t.tic()
             nms_time = misc_toc - misc_tic
-
 
             sys.stdout.write('im_detect: {:d}/{:d} {:.3f}s {:.3f}s   \r' \
                              .format(i + 1, num_images, detect_time, nms_time))
