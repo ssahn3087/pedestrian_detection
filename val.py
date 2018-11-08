@@ -34,7 +34,7 @@ def test(model, detector, imdb, roidb):
         image = process_img_by_lib(roidb[i]['image'])
         npos += len(gt_boxes)
         try:
-            dets, scores, classes = detector.detect(image, blob, thr=0.8, nms_thresh=0.3)
+            dets, scores, classes = detector.detect(image, blob, thr=0.7, nms_thresh=0.3)
             # dets : N x 4, gt_boxes : K x 4
             # overlaps : N x K overlaps score
             overlaps = bbox_overlaps(np.ascontiguousarray(dets, dtype=np.float) \
@@ -158,9 +158,10 @@ if __name__ == '__main__':
     # hyper-parameters
     # ------------
     imdb_name = 'CaltechPedestrians_test'
+    db_only = imdb_name.split('_')[0]
     model_dir = 'data/test_phase/'
     models = os.listdir(model_dir)
-    pretrained_model = [os.path.join(model_dir, model) for model in models if 'CaltechPedestrians' in model.split('_')]
+    pretrained_model = [os.path.join(model_dir, model) for model in models if db_only in model.split('_')]
     pretrained_model.sort()
 
 

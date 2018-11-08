@@ -36,12 +36,12 @@ def log_print(text, color='blue', on_color=None, attrs=None):
 
 # hyper-parameters
 # ------------
-# imdb_name = 'voc_2007_trainval'
-# test_name = 'voc_2007_test'
+imdb_name = 'voc_2007_trainval'
+test_name = 'voc_2007_test'
 # imdb_name = 'coco_2017_train'
 # test_name = 'coco_2017_val'
-imdb_name = 'CaltechPedestrians_train'
-test_name = 'CaltechPedestrians_test'
+# imdb_name = 'CaltechPedestrians_train'
+# test_name = 'CaltechPedestrians_test'
 
 
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
@@ -60,7 +60,7 @@ rand_seed = 1024
 
 _DEBUG = True
 use_tensorboard = True
-remove_all_log = False # remove all historical experiments in TensorBoard
+remove_all_log = True # remove all historical experiments in TensorBoard
 exp_name = None  # the previous experiment name in TensorBoard
 
 # ------------
@@ -105,7 +105,7 @@ if cfg.TRIPLET.IS_TRUE:
     model_name += '_' + cfg.TRIPLET.LOSS
 # network.load_net(pretrained_model, net)
 # person_key = 15 (pascal_voc) user_defined_coco_set = 1
-network.load_net_pedestrians(pretrained_model, net, person_key=15)
+#network.load_net_pedestrians(pretrained_model, net, person_key=15)
 
 blob = init_data(is_cuda=True)
 

@@ -32,7 +32,7 @@ class proposal_target_layer(nn.Module):
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.BBOX_INSIDE_WEIGHTS)
         self.fg_rois = 0
 
-    def forward(self, all_rois, gt_boxes, num_boxes):
+    def forward(self, all_rois, gt_boxes, num_boxes, im_info):
 
         self.BBOX_NORMALIZE_MEANS = self.BBOX_NORMALIZE_MEANS.type_as(gt_boxes)
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
@@ -40,7 +40,7 @@ class proposal_target_layer(nn.Module):
 
         gt_boxes_append = gt_boxes.new(gt_boxes.size()).zero_()
         gt_boxes_append[:, :, 1:5] = gt_boxes[:, :, :4]
-        jitter_gt_boxes = self.jitter_gt_boxes(gt_boxes_append)
+        jitter_gt_boxes = self.jitter_gt_boxes(gt_boxes_append, im_info=im_info)
         for i in range(gt_boxes.size(0)):
             gt_boxes_append[i, :, 0] = i
             jitter_gt_boxes[i, :, 0] = i
@@ -218,10 +218,12 @@ class proposal_target_layer(nn.Module):
 
         return labels_batch, rois_batch, bbox_targets, bbox_inside_weights
 
-    def jitter_gt_boxes(self, gt_boxes, jitter=0.15):
+    def jitter_gt_boxes(self, gt_boxes, im_info, jitter=0.15):
         """ jitter the gtboxes, before adding them into rois, to be more robust for cls and rgs
         gt_boxes: (G, 5) [x1 ,y1 ,x2, y2, class] int
         """
+        max_width = im_info[0][1]
+        max_height = im_info[0][0]
         jittered_boxes = gt_boxes.new(gt_boxes.size()).zero_()
         jittered_boxes.copy_(gt_boxes)
         for i in range(gt_boxes.size(0)):
@@ -236,4 +238,9 @@ class proposal_target_layer(nn.Module):
                 jittered_boxes[i, j, 3] += width_offset[1]
                 jittered_boxes[i, j, 2] += height_offset[0]
                 jittered_boxes[i, j, 4] += height_offset[1]
+        jittered_boxes[:, :, 1].clamp_(0, max_width - 1)
+        jittered_boxes[:, :, 3].clamp_(0, max_width - 1)
+        jittered_boxes[:, :, 2].clamp_(0, max_height - 1)
+        jittered_boxes[:, :, 4].clamp_(0, max_height - 1)
+
         return jittered_boxes

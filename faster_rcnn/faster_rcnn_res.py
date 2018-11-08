@@ -217,7 +217,7 @@ class FasterRCNN(nn.Module):
         features, rois = self.rpn(im_data, im_info, gt_boxes, num_boxes)
 
         if self.training:
-            roi_data = self.proposal_target_layer(rois, gt_boxes, num_boxes)
+            roi_data = self.proposal_target_layer(rois, gt_boxes, num_boxes, im_info)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
             rois_label = Variable(rois_label.view(-1).long())
 

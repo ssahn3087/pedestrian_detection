@@ -19,7 +19,7 @@ from faster_rcnn.nms.nms_wrapper import nms
 # hyper-parameters
 # ------------
 test_name = 'voc_2007_test'
-vis = False
+vis = True
 cfg_file = 'experiments/cfgs/faster_rcnn_end2end.yml'
 model_dir = 'data/pretrained_model/'
 output_dir = 'models/det_file/'
